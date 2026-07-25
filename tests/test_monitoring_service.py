@@ -105,6 +105,40 @@ async def test_refresh_appends_a_snapshot_for_each_same_day_update(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_collect_due_does_not_collect_again_after_manual_refresh_wins_lock(tmp_path):
+    day_one = datetime(2026, 7, 24, 9, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+    now = day_one + timedelta(days=1)
+    current_now = day_one
+    initial_due_evaluated = asyncio.Event()
+    allow_scheduled_refresh = asyncio.Event()
+
+    class RaceService(MonitoringService):
+        async def refresh(self, task_id, *, scheduled=False):
+            if not initial_due_evaluated.is_set():
+                initial_due_evaluated.set()
+                await allow_scheduled_refresh.wait()
+            return await super().refresh(task_id, scheduled=scheduled)
+
+    reader = FakeReader()
+    service = RaceService(
+        reader, MonitoringStore(tmp_path / "monitoring.json"), now=lambda: current_now
+    )
+    task, _ = await service.create("https://www.xiaohongshu.com/explore/note-fixture")
+    current_now = now
+    reader.likes = 130
+
+    scheduled_collection = asyncio.create_task(service.collect_due())
+    await initial_due_evaluated.wait()
+    await service.refresh(task.task_id)
+    allow_scheduled_refresh.set()
+    await scheduled_collection
+
+    refreshed = service.get(task.task_id)
+    assert [snapshot.likes for snapshot in refreshed.snapshots] == [100, 130]
+    assert reader.calls == 2
+
+
+@pytest.mark.asyncio
 async def test_collect_due_skips_expired_task_and_fills_missing_current_day(tmp_path):
     day_one = datetime(2026, 7, 1, 9, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
     now = day_one + timedelta(days=1)

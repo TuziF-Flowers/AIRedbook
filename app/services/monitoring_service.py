@@ -83,11 +83,13 @@ class MonitoringService:
         )
         return self.store.upsert(task)
 
-    async def refresh(self, task_id: str) -> MonitoringTask:
+    async def refresh(self, task_id: str, *, scheduled: bool = False) -> MonitoringTask:
         async with self._task_lock(task_id):
             task = self.get(task_id)
             now = self.now()
             if now.astimezone(ASIA_SHANGHAI).date() > task.monitoring_ends_on:
+                return task
+            if scheduled and not is_due(task, now):
                 return task
             return await self._collect(task)
 
@@ -144,7 +146,7 @@ class MonitoringService:
             if not is_due(task, now):
                 continue
             try:
-                await self.refresh(task.task_id)
+                await self.refresh(task.task_id, scheduled=True)
             except Exception:
                 continue
 
