@@ -65,13 +65,13 @@ async def fake_lifespan(application):
     yield
 
 
-def make_fake_monitoring_lifespan(tmp_path):
+def make_fake_monitoring_lifespan(tmp_path, monitoring=None):
     @asynccontextmanager
     async def lifespan(application):
         application.state.redbook = FakeRedbookCLI()
         application.state.analyzer = CompetitorAnalyzer(settings)
         application.state.note_details = {}
-        application.state.monitoring = MonitoringService(
+        application.state.monitoring = monitoring or MonitoringService(
             application.state.redbook,
             MonitoringStore(tmp_path / "monitoring.json"),
         )
@@ -108,7 +108,7 @@ def test_monitoring_task_api_creates_lists_refreshes_and_deletes(tmp_path):
         app.router.lifespan_context = original_lifespan
 
 
-def test_monitoring_task_api_rejects_untrusted_url(tmp_path):
+def test_monitoring_task_api_rejects_invalid_urls(tmp_path):
     original_lifespan = app.router.lifespan_context
     app.router.lifespan_context = make_fake_monitoring_lifespan(tmp_path)
     try:
@@ -118,6 +118,28 @@ def test_monitoring_task_api_rejects_untrusted_url(tmp_path):
             )
         assert response.status_code == 422
         assert response.json()["code"] == "INVALID_NOTE_URL"
+
+        malformed = client.post("/api/monitoring/tasks", json={"web_url": "not-a-url"})
+        assert malformed.status_code == 422
+        assert malformed.json()["code"] == "INVALID_NOTE_URL"
+    finally:
+        app.router.lifespan_context = original_lifespan
+
+
+def test_monitoring_task_api_returns_service_unavailable_for_store_write_error(tmp_path):
+    class FailingMonitoringService:
+        async def refresh(self, task_id):
+            raise OSError("disk full")
+
+    original_lifespan = app.router.lifespan_context
+    app.router.lifespan_context = make_fake_monitoring_lifespan(
+        tmp_path, monitoring=FailingMonitoringService()
+    )
+    try:
+        with TestClient(app) as client:
+            response = client.post("/api/monitoring/tasks/task-fixture/refresh")
+        assert response.status_code == 503
+        assert response.json()["code"] == "MONITORING_ARCHIVE_UNAVAILABLE"
     finally:
         app.router.lifespan_context = original_lifespan
 
