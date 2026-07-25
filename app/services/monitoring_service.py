@@ -129,12 +129,6 @@ class MonitoringService:
                 collects=detail.stats.collects,
                 comments=detail.stats.comments,
             )
-            today = now.astimezone(ASIA_SHANGHAI).date()
-            task.snapshots = [
-                current
-                for current in task.snapshots
-                if current.collected_at.astimezone(ASIA_SHANGHAI).date() != today
-            ]
             task.snapshots.append(snapshot)
             task.last_collected_at = now
             task.last_error = None

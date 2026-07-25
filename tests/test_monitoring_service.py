@@ -89,7 +89,7 @@ async def test_repeated_failed_creation_reuses_task_by_normalized_url(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_refresh_keeps_one_snapshot_per_beijing_day(tmp_path):
+async def test_refresh_appends_a_snapshot_for_each_same_day_update(tmp_path):
     now = datetime(2026, 7, 25, 9, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
     reader = FakeReader()
     service = MonitoringService(
@@ -100,8 +100,8 @@ async def test_refresh_keeps_one_snapshot_per_beijing_day(tmp_path):
 
     refreshed = await service.refresh(task.task_id)
 
-    assert len(refreshed.snapshots) == 1
-    assert refreshed.snapshots[0].likes == 130
+    assert len(refreshed.snapshots) == 2
+    assert [snapshot.likes for snapshot in refreshed.snapshots] == [100, 130]
 
 
 @pytest.mark.asyncio
