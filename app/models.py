@@ -3,8 +3,16 @@ from __future__ import annotations
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Literal
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    computed_field,
+    field_validator,
+)
 
 
 def _require_timezone(value: datetime | None) -> datetime | None:
@@ -189,6 +197,16 @@ class MonitoringTask(BaseModel):
     @classmethod
     def require_timezone(cls, value: datetime | None) -> datetime | None:
         return _require_timezone(value)
+
+    @computed_field
+    @property
+    def status(self) -> MonitoringTaskStatus:
+        today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+        if today > self.monitoring_ends_on:
+            return MonitoringTaskStatus.COMPLETED
+        if self.last_error:
+            return MonitoringTaskStatus.ERROR
+        return MonitoringTaskStatus.ACTIVE
 
 
 class MonitoringTaskCreate(BaseModel):

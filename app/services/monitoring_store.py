@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -21,6 +22,14 @@ def _is_pending_note_id(note_id: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _normalize_web_url(web_url: str) -> str:
+    parts = urlsplit(web_url)
+    path = parts.path.rstrip("/") or "/"
+    return urlunsplit(
+        (parts.scheme.lower(), parts.netloc.lower(), path, parts.query, "")
+    )
 
 
 class MonitoringStore:
@@ -48,6 +57,17 @@ class MonitoringStore:
 
     def find_by_note_id(self, note_id: str) -> MonitoringTask | None:
         return next((task for task in self.load().tasks if task.note_id == note_id), None)
+
+    def find_by_web_url(self, web_url: str) -> MonitoringTask | None:
+        normalized_url = _normalize_web_url(web_url)
+        return next(
+            (
+                task
+                for task in self.load().tasks
+                if _normalize_web_url(task.web_url) == normalized_url
+            ),
+            None,
+        )
 
     def upsert(self, task: MonitoringTask) -> MonitoringTask:
         archive = self.load()

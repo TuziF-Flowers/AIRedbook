@@ -92,6 +92,7 @@ def test_monitoring_task_api_creates_lists_refreshes_and_deletes(tmp_path):
             assert created.status_code == 201
             task_id = created.json()["task_id"]
             assert created.json()["snapshots"][0]["likes"] == 100
+            assert created.json()["status"] == "active"
 
             duplicate = client.post(
                 "/api/monitoring/tasks",

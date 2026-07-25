@@ -35,8 +35,13 @@ class MonitoringService:
         self.store = store
         self.now = now or (lambda: datetime.now(ASIA_SHANGHAI))
         self._scheduler_task: asyncio.Task[None] | None = None
+        self._task_locks: dict[str, asyncio.Lock] = {}
 
     async def create(self, web_url: str) -> tuple[MonitoringTask, bool]:
+        existing = self.store.find_by_web_url(web_url)
+        if existing:
+            return existing, False
+
         try:
             detail = normalize_detail(
                 await self.client.read_note(web_url), requested_url=web_url
@@ -79,8 +84,12 @@ class MonitoringService:
         return self.store.upsert(task)
 
     async def refresh(self, task_id: str) -> MonitoringTask:
-        task = self.get(task_id)
-        return await self._collect(task)
+        async with self._task_lock(task_id):
+            task = self.get(task_id)
+            now = self.now()
+            if now.astimezone(ASIA_SHANGHAI).date() > task.monitoring_ends_on:
+                return task
+            return await self._collect(task)
 
     def list_tasks(self) -> list[MonitoringTask]:
         return sorted(self.store.load().tasks, key=lambda task: task.created_at, reverse=True)
@@ -91,8 +100,14 @@ class MonitoringService:
                 return task
         raise KeyError(task_id)
 
-    def delete(self, task_id: str) -> bool:
-        return self.store.delete(task_id)
+    async def delete(self, task_id: str) -> bool:
+        async with self._task_lock(task_id):
+            return self.store.delete(task_id)
+
+    def _task_lock(self, task_id: str) -> asyncio.Lock:
+        if task_id not in self._task_locks:
+            self._task_locks[task_id] = asyncio.Lock()
+        return self._task_locks[task_id]
 
     async def _collect(self, task: MonitoringTask, *, detail: Any | None = None) -> MonitoringTask:
         now = self.now()
@@ -103,7 +118,7 @@ class MonitoringService:
             duplicate = self.store.find_by_note_id(detail.note_id)
             if duplicate and duplicate.task_id != task.task_id:
                 self.store.delete(task.task_id)
-                return await self._collect(duplicate, detail=detail)
+                return duplicate
 
             task.note_id = detail.note_id
             task.title = detail.title

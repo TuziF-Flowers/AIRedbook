@@ -759,6 +759,23 @@ function formatMonitoringDate(value) {
   }).format(new Date(value));
 }
 
+function formatMonitoringTimestamp(value, includeTime = true) {
+  if (!value) return "暂无";
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    ...(includeTime ? { hour: "2-digit", minute: "2-digit", hour12: false } : {}),
+  }).format(new Date(value));
+}
+
+function formatMonitoringDelta(delta) {
+  if (delta === null) return "首次快照";
+  const sign = delta >= 0 ? "+" : "−";
+  return `较前次 ${sign}${formatCount(Math.abs(delta))}`;
+}
+
 function visibleMonitoringSnapshots(task) {
   const snapshots = monitoringSnapshots(task);
   if (state.monitoringRange === "all" || !snapshots.length) return snapshots;
@@ -771,16 +788,20 @@ function visibleMonitoringSnapshots(task) {
 
 function renderMonitoringMetricCards(task) {
   monitoringMetricCards.replaceChildren();
-  const latest = monitoringSnapshots(task).at(-1);
   [
     ["likes", "点赞"],
     ["collects", "收藏"],
     ["comments", "评论"],
   ].forEach(([metric, label]) => {
+    const summary = window.MonitoringView.metricSummary(task, metric);
     const card = element("button", `monitoring-metric-card${metric === state.monitoringMetric ? " active" : ""}`);
     card.type = "button";
     card.dataset.monitoringMetric = metric;
-    card.append(element("span", "", label), element("strong", "", formatCount(monitoringMetricValue(latest, metric))));
+    card.append(
+      element("span", "", label),
+      element("strong", "", formatCount(summary.total)),
+      element("small", "monitoring-metric-delta", formatMonitoringDelta(summary.delta)),
+    );
     monitoringMetricCards.append(card);
   });
 }
@@ -793,13 +814,39 @@ function renderMonitoringTasks() {
   }
   state.monitoringTasks.forEach((task) => {
     const active = monitoringTaskId(task) === monitoringTaskId(state.monitoringTask);
+    const presentation = window.MonitoringView.taskPresentation(task);
     const card = element("button", `monitoring-task-card${active ? " active" : ""}`);
     card.type = "button";
-    card.append(
+    const cover = element("span", "monitoring-task-cover");
+    if (presentation.coverUrl) {
+      cover.append(image(presentation.coverUrl, task.title || "笔记封面"));
+    } else {
+      cover.append(element("span", "monitoring-task-cover-placeholder", "笔记"));
+    }
+    const content = element("span", "monitoring-task-content");
+    content.append(
       element("strong", "", task.title || task.note_title || "已发布笔记"),
-      element("span", "", task.status === "failed" ? "更新失败" : "监测中"),
+      element(
+        "span",
+        `monitoring-task-status ${presentation.statusClass}`,
+        presentation.statusLabel,
+      ),
+      element(
+        "small",
+        "",
+        `创建 ${formatMonitoringTimestamp(presentation.createdAt, false)}`,
+      ),
+      element(
+        "small",
+        "",
+        `更新 ${formatMonitoringTimestamp(presentation.updatedAt)}`,
+      ),
       element("small", "", `${monitoringSnapshots(task).length} 条快照`),
     );
+    if (presentation.error) {
+      content.append(element("span", "monitoring-task-error", presentation.error));
+    }
+    card.append(cover, content);
     card.addEventListener("click", () => openMonitoringTask(task));
     monitoringTaskList.append(card);
   });
@@ -883,7 +930,7 @@ async function loadMonitoringTasks() {
     renderMonitoringTasks();
     if (selected) openMonitoringTask(selected);
     else if (!state.monitoringTask) {
-      const firstActive = state.monitoringTasks.find((task) => task.status !== "deleted" && task.status !== "completed");
+      const firstActive = state.monitoringTasks.find((task) => task.status === "active" || task.status === "error");
       if (firstActive) openMonitoringTask(firstActive);
     }
   } catch (error) {

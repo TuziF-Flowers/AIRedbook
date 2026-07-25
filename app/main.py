@@ -550,7 +550,7 @@ async def refresh_monitoring_task(request: Request, task_id: str) -> MonitoringT
 @app.delete("/api/monitoring/tasks/{task_id}", status_code=204)
 async def delete_monitoring_task(request: Request, task_id: str) -> Response:
     try:
-        if not _monitoring(request).delete(task_id):
+        if not await _monitoring(request).delete(task_id):
             raise KeyError(task_id)
     except (MonitoringArchiveError, OSError) as exc:
         return _monitoring_archive_error_response(exc)

@@ -1804,7 +1804,9 @@ footer {
 .monitoring-task-card {
   display: grid;
   padding: 14px;
-  gap: 5px;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   color: var(--ink);
@@ -1816,6 +1818,59 @@ footer {
   border-color: var(--purple);
   background: var(--purple-soft);
   box-shadow: 0 8px 20px rgba(101, 88, 245, 0.13);
+}
+
+.monitoring-task-cover {
+  display: grid;
+  width: 64px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--purple-soft);
+}
+
+.monitoring-task-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.monitoring-task-cover-placeholder {
+  font-size: 11px;
+}
+
+.monitoring-task-content {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.monitoring-task-status {
+  width: max-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--purple);
+  background: var(--purple-soft);
+}
+
+.monitoring-task-status.completed {
+  color: #4e6570;
+  background: #edf2f4;
+}
+
+.monitoring-task-status.error {
+  color: #a93939;
+  background: #fff0f0;
+}
+
+.monitoring-task-error {
+  padding: 7px 8px;
+  border-radius: 8px;
+  color: #a93939;
+  background: #fff5f5;
+  overflow-wrap: anywhere;
 }
 
 .monitoring-task-card span,
@@ -1861,6 +1916,11 @@ footer {
 
 .monitoring-metric-card strong {
   font-size: 22px;
+}
+
+.monitoring-metric-card .monitoring-metric-delta {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 #monitoring-metric-tabs,
