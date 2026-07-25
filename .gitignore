@@ -8,4 +8,5 @@ htmlcov/
 .coverage
 node_modules/
 .redbook/
-
+.worktrees/
+.superpowers/sdd/
