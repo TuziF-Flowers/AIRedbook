@@ -18,6 +18,7 @@ const analysisContent = $("#analysis-content");
 const analysisMode = $("#analysis-mode");
 const reportPreview = $("#report-preview");
 const summaryList = $("#summary-list");
+const artifactStatus = $("#artifact-status");
 const metricsOverview = $("#metrics-overview");
 const metricsOverviewMeta = $("#metrics-overview-meta");
 const metricsOverviewContent = $("#metrics-overview-content");
@@ -354,11 +355,12 @@ async function runSearch() {
   state.notes = [];
   hideMessage();
   searchButton.disabled = true;
-  searchButton.firstElementChild.textContent = "正在准备 AI 样本…";
+  searchButton.firstElementChild.textContent = "采集中…";
   analyzeButton.disabled = true;
   copyReportButton.disabled = true;
   downloadJsonButton.disabled = true;
   downloadReportButton.disabled = true;
+  artifactStatus.textContent = "AI 洞察完成后会自动保存本地 JSON。";
   resultsGrid.replaceChildren();
   renderSkeletons();
   analysisSection.hidden = true;
@@ -421,7 +423,7 @@ async function runSearch() {
     window.clearTimeout(progressTimer);
     state.loading = false;
     searchButton.disabled = false;
-    searchButton.firstElementChild.textContent = "启动 AI 洞察";
+    searchButton.firstElementChild.textContent = "开始采集";
   }
 }
 
@@ -436,17 +438,17 @@ async function runAnalysis() {
   if (state.analyzing || !state.notes.length) return;
   state.analyzing = true;
   analyzeButton.disabled = true;
-  analyzeButton.lastElementChild.textContent = "AI 正在分析…";
+  analyzeButton.lastElementChild.textContent = "正在分析…";
   analysisSection.hidden = false;
   metricsOverview.hidden = true;
   setStep(3);
   setAnalysisProgress(28, "正在整理竞品样本", `已加载 ${state.notes.length} 篇高互动图文`);
-  analysisContent.innerHTML = '<div class="analysis-loading"><span>✦</span><strong>AI 正在提炼爆款规律</strong><small>融合规则证据，理解标题、正文、图片与互动表现</small></div>';
+  analysisContent.innerHTML = '<div class="analysis-loading"><span>✦</span><strong>AI 正在提炼爆款规律</strong><small>分析标题、正文结构、图片数量与互动表现</small></div>';
   analysisSection.scrollIntoView({ behavior: "smooth", block: "start" });
   scheduleSideNavUpdate();
 
   const progressTimer = window.setTimeout(() => {
-    setAnalysisProgress(72, "AI 正在生成结构化洞察", "组合标题、内容、图片与互动证据");
+    setAnalysisProgress(72, "正在生成竞品总结", "组合标题、内容、图片与互动洞察");
   }, 500);
 
   try {
@@ -458,11 +460,14 @@ async function runAnalysis() {
     state.analysis = await parseResponse(response);
     setAnalysisProgress(
       100,
-      "AI 竞品洞察已生成",
+      "竞品规律分析完成",
       `已分析 ${state.analysis.source_count} 篇笔记 · ${state.analysis.mode_label}`,
     );
-    analysisMode.textContent = state.analysis.analysis_mode === "ai" ? "大模型增强洞察" : "本地规则洞察";
+    analysisMode.textContent = state.analysis.analysis_mode === "ai" ? "AI 深度分析" : "本地规则分析";
     reportPreview.textContent = state.analysis.report_markdown;
+    artifactStatus.textContent = state.analysis.artifact_id
+      ? `JSON 已保存 · ${state.analysis.artifact_id}`
+      : "本次分析未生成 JSON 文件。";
     renderSummary(state.analysis.summary);
     renderMetricsOverview(state.analysis);
     copyReportButton.disabled = false;
@@ -477,7 +482,7 @@ async function runAnalysis() {
     window.clearTimeout(progressTimer);
     state.analyzing = false;
     analyzeButton.disabled = false;
-    analyzeButton.lastElementChild.textContent = "重新生成 AI 洞察";
+    analyzeButton.lastElementChild.textContent = "重新生成分析";
   }
 }
 

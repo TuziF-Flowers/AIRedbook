@@ -1502,6 +1502,13 @@ footer {
   gap: 9px;
 }
 
+.artifact-status {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
 .secondary-button {
   border: 1px solid var(--line);
   color: #666678;
