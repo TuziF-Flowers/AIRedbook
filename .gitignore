@@ -9,3 +9,6 @@ htmlcov/
 node_modules/
 .redbook/
 data/analyses/
+/data/monitoring.json
+.worktrees/
+.superpowers/sdd/

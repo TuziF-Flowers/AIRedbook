@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "Pinned redbook CLI runtime for the Python demo",
   "dependencies": {
-    "@lucasygu/redbook": "0.8.1"
+    "@lucasygu/redbook": "0.8.1",
+    "echarts": "^6.1.0"
   },
   "scripts": {
     "postinstall": "node scripts/patch-redbook-cdp.mjs",

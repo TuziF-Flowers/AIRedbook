@@ -25,6 +25,8 @@ from app.models import (
 )
 from app.services.analysis_store import AnalysisStore
 from app.services.competitor_analyzer import CompetitorAnalyzer
+from app.services.monitoring_service import MonitoringService
+from app.services.monitoring_store import MonitoringStore
 
 
 class FakeRedbookCLI:
@@ -58,6 +60,7 @@ class FakeRedbookCLI:
             "desc": "详情正文",
             "type": "normal",
             "user": {"nickname": "测试作者"},
+            "interact_info": {"liked_count": "100"},
             "image_list": [
                 {
                     "url_default": "http://sns-webpic-qc.xhscdn.com/preview.webp"
@@ -97,6 +100,88 @@ async def fake_lifespan(application):
         application.state.promotion_generator = FakePromotionGenerator()
         application.state.note_details = {}
         yield
+
+
+def make_fake_monitoring_lifespan(tmp_path, monitoring=None):
+    @asynccontextmanager
+    async def lifespan(application):
+        application.state.redbook = FakeRedbookCLI()
+        application.state.analyzer = CompetitorAnalyzer(
+            Settings(ai_api_key=None, ai_model=None, ai_enable_vision=False)
+        )
+        application.state.note_details = {}
+        application.state.monitoring = monitoring or MonitoringService(
+            application.state.redbook,
+            MonitoringStore(tmp_path / "monitoring.json"),
+        )
+        yield
+
+    return lifespan
+
+
+def test_monitoring_task_api_creates_lists_refreshes_and_deletes(tmp_path):
+    original_lifespan = app.router.lifespan_context
+    app.router.lifespan_context = make_fake_monitoring_lifespan(tmp_path)
+    try:
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/monitoring/tasks",
+                json={"web_url": "https://www.xiaohongshu.com/explore/note-fixture"},
+            )
+            assert created.status_code == 201
+            task_id = created.json()["task_id"]
+            assert created.json()["snapshots"][0]["likes"] == 100
+            assert created.json()["status"] == "active"
+
+            duplicate = client.post(
+                "/api/monitoring/tasks",
+                json={"web_url": "https://www.xiaohongshu.com/explore/note-fixture"},
+            )
+            assert duplicate.status_code == 200
+            assert duplicate.json()["task_id"] == task_id
+
+            assert client.get("/api/monitoring/tasks").json()[0]["task_id"] == task_id
+            assert client.post(f"/api/monitoring/tasks/{task_id}/refresh").status_code == 200
+            assert client.delete(f"/api/monitoring/tasks/{task_id}").status_code == 204
+            assert client.get(f"/api/monitoring/tasks/{task_id}").status_code == 404
+    finally:
+        app.router.lifespan_context = original_lifespan
+
+
+def test_monitoring_task_api_rejects_invalid_urls(tmp_path):
+    original_lifespan = app.router.lifespan_context
+    app.router.lifespan_context = make_fake_monitoring_lifespan(tmp_path)
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/monitoring/tasks", json={"web_url": "https://example.com/note"}
+            )
+        assert response.status_code == 422
+        assert response.json()["code"] == "INVALID_NOTE_URL"
+
+        malformed = client.post("/api/monitoring/tasks", json={"web_url": "not-a-url"})
+        assert malformed.status_code == 422
+        assert malformed.json()["code"] == "INVALID_NOTE_URL"
+    finally:
+        app.router.lifespan_context = original_lifespan
+
+
+def test_monitoring_task_api_returns_service_unavailable_for_store_write_error(tmp_path):
+    class FailingMonitoringService:
+        async def refresh(self, task_id):
+            raise OSError("disk full")
+
+    original_lifespan = app.router.lifespan_context
+    app.router.lifespan_context = make_fake_monitoring_lifespan(
+        tmp_path, monitoring=FailingMonitoringService()
+    )
+    try:
+        with TestClient(app) as client:
+            response = client.post("/api/monitoring/tasks/task-fixture/refresh")
+        assert response.status_code == 503
+        assert response.json()["code"] == "MONITORING_ARCHIVE_UNAVAILABLE"
+    finally:
+        app.router.lifespan_context = original_lifespan
 
 
 def test_search_and_detail_api():
@@ -246,6 +331,19 @@ def test_image_proxy_only_accepts_xiaohongshu_cdn_hosts():
     print("  ✅ 拒绝: HTTP 协议")
     assert not _is_allowed_image_url("https://xhscdn.com.example.com/example.webp")
     print("  ✅ 拒绝: 伪造域名 xhscdn.com.example.com")
+
+
+def test_echarts_bundle_is_served_locally():
+    original_lifespan = app.router.lifespan_context
+    app.router.lifespan_context = fake_lifespan
+    try:
+        with TestClient(app) as client:
+            response = client.get("/vendor/echarts/echarts.min.js")
+
+        assert response.status_code == 200
+        assert "javascript" in response.headers["content-type"]
+    finally:
+        app.router.lifespan_context = original_lifespan
 
 
 def test_search_selects_top_twenty_images_by_likes_and_collects():

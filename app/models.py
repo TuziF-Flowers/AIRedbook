@@ -1,8 +1,24 @@
 from __future__ import annotations
 
+from datetime import date, datetime
+from enum import StrEnum
 from typing import Literal
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    computed_field,
+    field_validator,
+)
+
+
+def _require_timezone(value: datetime | None) -> datetime | None:
+    if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+        raise ValueError("监测时间必须包含时区信息")
+    return value
 
 
 class Author(BaseModel):
@@ -177,3 +193,69 @@ class ApiErrorBody(BaseModel):
     code: str
     message: str
     hint: str | None = None
+
+
+class MonitoringTaskStatus(StrEnum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    ERROR = "error"
+
+
+class InteractionSnapshot(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
+    collected_at: datetime
+    likes: int = Field(ge=0)
+    collects: int = Field(ge=0)
+    comments: int = Field(ge=0)
+
+    @field_validator("collected_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        return _require_timezone(value)
+
+
+class MonitoringTask(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
+    task_id: str
+    note_id: str
+    web_url: str
+    title: str
+    cover_url: str | None = None
+    created_at: datetime
+    monitoring_starts_at: datetime
+    monitoring_ends_on: date
+    snapshots: list[InteractionSnapshot] = Field(default_factory=list)
+    last_collected_at: datetime | None = None
+    last_error: str | None = None
+    last_error_at: datetime | None = None
+
+    @field_validator(
+        "created_at",
+        "monitoring_starts_at",
+        "last_collected_at",
+        "last_error_at",
+    )
+    @classmethod
+    def require_timezone(cls, value: datetime | None) -> datetime | None:
+        return _require_timezone(value)
+
+    @computed_field
+    @property
+    def status(self) -> MonitoringTaskStatus:
+        today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+        if today > self.monitoring_ends_on:
+            return MonitoringTaskStatus.COMPLETED
+        if self.last_error:
+            return MonitoringTaskStatus.ERROR
+        return MonitoringTaskStatus.ACTIVE
+
+
+class MonitoringTaskCreate(BaseModel):
+    web_url: HttpUrl
+
+
+class MonitoringArchive(BaseModel):
+    version: Literal[1] = 1
+    tasks: list[MonitoringTask] = Field(default_factory=list)

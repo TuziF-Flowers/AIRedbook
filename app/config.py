@@ -62,6 +62,9 @@ class Settings:
     ai_image_timeout_seconds: float = float(
         os.getenv("AI_IMAGE_TIMEOUT_SECONDS", "240")
     )
+    monitoring_data_file: Path = Path(
+        os.getenv("MONITORING_DATA_FILE", PROJECT_ROOT / "data" / "monitoring.json")
+    )
 
 
 settings = Settings()
