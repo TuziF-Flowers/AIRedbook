@@ -1,0 +1,40 @@
+{
+  "note_id": "note-001",
+  "title": "一周真实使用体验",
+  "desc": "优点和不足都说清楚了。\n适合正在选购的朋友。",
+  "type": "normal",
+  "user": {
+    "user_id": "user-001",
+    "nickname": "体验派小林",
+    "avatar": "https://sns-avatar.example.com/avatar.jpg"
+  },
+  "interact_info": {
+    "liked_count": "12000",
+    "comment_count": "328",
+    "collected_count": "2100",
+    "share_count": "88"
+  },
+  "image_list": [
+    {
+      "url_default": "https://sns-img.example.com/1.jpg"
+    },
+    {
+      "info_list": [
+        {
+          "url": "https://sns-img.example.com/2.jpg"
+        }
+      ]
+    }
+  ],
+  "tag_list": [
+    {
+      "name": "真实测评"
+    },
+    {
+      "name": "产品体验"
+    }
+  ],
+  "time": 1784908800000,
+  "ip_location": "上海"
+}
+

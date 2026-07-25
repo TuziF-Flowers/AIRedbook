@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "model_type": "note",
+      "id": "note-001",
+      "xsec_token": "fixture-token",
+      "note_card": {
+        "type": "normal",
+        "display_title": "一周真实使用体验",
+        "user": {
+          "user_id": "user-001",
+          "nickname": "体验派小林",
+          "avatar": "https://sns-avatar.example.com/avatar.jpg"
+        },
+        "interact_info": {
+          "liked_count": "1.2万",
+          "comment_count": "328",
+          "collected_count": "2.1k"
+        },
+        "cover": {
+          "url_default": "https://sns-img.example.com/cover.jpg"
+        }
+      }
+    },
+    {
+      "model_type": "hot_query",
+      "title": "这不是笔记"
+    }
+  ],
+  "has_more": true
+}
+

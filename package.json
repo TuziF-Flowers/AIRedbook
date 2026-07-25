@@ -1,0 +1,15 @@
+{
+  "name": "redbook-search-demo-runtime",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pinned redbook CLI runtime for the Python demo",
+  "dependencies": {
+    "@lucasygu/redbook": "0.8.1"
+  },
+  "scripts": {
+    "postinstall": "node scripts/patch-redbook-cdp.mjs",
+    "auth:chrome": "redbook auth export --cookie-source chrome --platform xhs --output %USERPROFILE%\\.redbook\\cookies.chrome.json",
+    "auth:manual": ".venv\\Scripts\\python.exe scripts\\save_chrome_cookies.py",
+    "redbook": "redbook"
+  }
+}
