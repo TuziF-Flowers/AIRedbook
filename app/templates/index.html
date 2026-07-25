@@ -5,20 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="采集小红书高互动图文笔记，并生成产品竞品内容分析与 AI 总结。"
+      content="AI种草官：从小红书高互动样本采集、规则筛选到结构化 AI 洞察与报告交付。"
     />
-    <title>红研 AI · 小红书竞品分析</title>
+    <title>AI种草官 · 小红书竞品内容洞察</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', path='/images/ai-zhongcao-logo.png') }}" />
     <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
     <script defer src="{{ url_for('static', path='/app.js') }}"></script>
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar">
-        <a class="brand" href="/" aria-label="红研 AI 首页">
-          <span class="brand-mark">研</span>
+        <a class="brand" href="/" aria-label="AI种草官首页">
+          <img
+            class="brand-mark"
+            src="{{ url_for('static', path='/images/ai-zhongcao-logo.png') }}"
+            width="48"
+            height="48"
+            alt=""
+          />
           <span>
-            <strong>红研 AI</strong>
-            <small>产品内容洞察</small>
+            <strong>AI种草官</strong>
+            <small>AI 竞品内容洞察</small>
           </span>
         </a>
 
@@ -27,19 +34,19 @@
             <span>⌂</span>工作台
           </a>
           <a href="#collection" data-nav-key="collection"><span>▣</span>竞品采集</a>
-          <a href="#analysis" data-nav-key="analysis"><span>✦</span>AI 分析</a>
-          <a href="#metrics-overview" data-nav-key="report"><span>≡</span>分析报告</a>
+          <a href="#analysis" data-nav-key="analysis"><span>✦</span>AI 洞察</a>
+          <a href="#metrics-overview" data-nav-key="report"><span>≡</span>AI 报告</a>
         </nav>
 
         <div class="local-card">
           <span class="local-icon">◆</span>
-          <strong>本地安全模式</strong>
-          <p>使用本机登录态，分析结果不做持久化。</p>
+          <strong>AI 双引擎模式</strong>
+          <p>本地规则先生成完整洞察，接入大模型后自动增强；AI 服务失败也不影响报告交付。</p>
           <ul>
-            <li>只采集单品种草图文</li>
-            <li>排除测评、对比和合集</li>
-            <li>详情优先复用缓存</li>
-            <li>验证码触发即停止</li>
+            <li>规则引擎提炼内容规律</li>
+            <li>大模型生成结构化洞察</li>
+            <li>AI 异常自动安全回退</li>
+            <li>本机登录态与受限图片代理</li>
           </ul>
         </div>
       </aside>
@@ -53,11 +60,11 @@
             </li>
             <li data-step="2">
               <span>2</span>
-              <div><strong>竞品采集</strong><small>获取爆款内容</small></div>
+              <div><strong>样本采集</strong><small>筛选高价值内容</small></div>
             </li>
             <li data-step="3">
               <span>3</span>
-              <div><strong>AI 分析</strong><small>总结爆款规律</small></div>
+              <div><strong>AI 洞察</strong><small>生成内容策略</small></div>
             </li>
           </ol>
           <div id="session-status" class="session-badge" aria-live="polite">
@@ -69,13 +76,13 @@
         <section id="overview" class="search-area">
           <div class="page-heading">
             <div>
-              <p class="eyebrow">COMPETITOR INTELLIGENCE</p>
-              <h1>把高互动笔记，变成<span>可执行的内容策略</span></h1>
-              <p>输入产品、品牌或品类词，优先采集高互动的单品种草图文，自动排除测评、对比、避雷和合集内容。</p>
+              <p class="eyebrow">AI-POWERED COMPETITOR INTELLIGENCE</p>
+              <h1>让 AI 读懂小红书爆款，生成<span>可执行的内容策略</span></h1>
+              <p>输入产品、品牌或品类，系统将采集并筛选高互动种草样本，由规则引擎与大模型协同提炼标题、正文、图片和互动规律。</p>
             </div>
             <div class="heading-stat">
-              <strong>Top 20</strong>
-              <span>单品种草优先 · 点赞收藏排序</span>
+              <strong>AI × Rules</strong>
+              <span>双引擎分析 · 最多 20 篇高价值样本</span>
             </div>
           </div>
 
@@ -94,7 +101,7 @@
                   required
                 />
               </div>
-              <small>用于生成整体竞品分析报告</small>
+              <small>AI 将围绕该主题建立竞品洞察上下文</small>
             </div>
 
             <div class="form-card">
@@ -110,13 +117,13 @@
                 />
                 <button id="add-competitor" type="button" aria-label="添加竞品">＋</button>
               </div>
-              <small>合计最多采集 20 篇，系统自动分配每个竞品的名额</small>
+              <small>最多添加 3 个竞品，系统统一筛选并汇总不超过 20 篇样本</small>
             </div>
 
             <div class="search-actions">
-              <span class="strategy-pill">单品种草图文 · 排除测评/对比 · 第一页</span>
+              <span class="strategy-pill">高互动种草样本 · 智能过滤噪声 · AI 结构化洞察</span>
               <button id="search-button" class="primary-button" type="submit">
-                <span>开始采集</span><span aria-hidden="true">→</span>
+                <span>启动 AI 洞察</span><span aria-hidden="true">→</span>
               </button>
             </div>
           </form>
@@ -137,7 +144,7 @@
               <p id="results-meta" class="section-description"></p>
             </div>
             <button id="analyze-button" class="gradient-button" type="button" disabled>
-              <span>✦</span><span>生成 AI 竞品总结</span>
+              <span>✦</span><span>生成 AI 洞察报告</span>
             </button>
           </div>
 
@@ -209,8 +216,8 @@
             <div>
               <span class="progress-icon">✦</span>
               <div>
-                <strong id="analysis-progress-title">正在分析爆款规律</strong>
-                <small id="analysis-progress-meta">准备样本数据</small>
+                <strong id="analysis-progress-title">AI 正在理解爆款规律</strong>
+                <small id="analysis-progress-meta">准备结构化样本上下文</small>
               </div>
             </div>
             <span id="analysis-progress-percent" class="progress-percent">0%</span>
@@ -230,7 +237,7 @@
               </div>
 
               <div id="analysis-content" class="analysis-content">
-                <div class="analysis-empty">完成采集后生成竞品分析。</div>
+                <div class="analysis-empty">完成样本采集后，即可生成 AI 竞品洞察。</div>
               </div>
             </div>
 
@@ -238,22 +245,23 @@
               <div class="report-heading">
                 <div>
                   <span class="report-kicker">ANALYSIS REPORT</span>
-                  <h2>竞品分析报告</h2>
+                  <h2>AI 竞品洞察报告</h2>
                 </div>
                 <span id="analysis-mode" class="mode-badge">等待生成</span>
               </div>
-              <pre id="report-preview" class="report-preview">报告生成后将在这里显示 Markdown 预览。</pre>
+              <pre id="report-preview" class="report-preview">AI 洞察生成后，将在这里显示 Markdown 报告预览。</pre>
               <div class="report-actions">
                 <button id="copy-report" class="secondary-button" type="button" disabled>复制报告</button>
+                <button id="download-json" class="secondary-button" type="button" disabled>导出 JSON</button>
                 <button id="download-report" class="gradient-button" type="button" disabled>导出 Markdown</button>
               </div>
 
               <div class="summary-card">
                 <span class="summary-icon">✦</span>
                 <div>
-                  <h3>爆款经验总结</h3>
+                  <h3>AI 策略摘要</h3>
                   <ul id="summary-list">
-                    <li>分析完成后自动生成可执行结论</li>
+                    <li>融合规则证据与模型推理，自动生成可执行结论</li>
                   </ul>
                 </div>
               </div>
@@ -270,9 +278,9 @@
         </section>
 
         <footer>
-          <span>本地只读竞品分析 Demo</span>
+          <span>本地优先的 AI 竞品洞察 Demo</span>
           <span>·</span>
-          <span>结论仅基于当前可见样本，请结合业务判断</span>
+          <span>AI 结论基于当前可见样本，请结合业务判断</span>
         </footer>
       </main>
     </div>

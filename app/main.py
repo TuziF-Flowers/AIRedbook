@@ -6,8 +6,8 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import httpx
-from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -21,6 +21,7 @@ from app.models import (
     NoteSummary,
     SearchResponse,
 )
+from app.services.analysis_store import AnalysisStore
 from app.services.competitor_analyzer import CompetitorAnalyzer
 from app.services.normalizer import normalize_detail, normalize_search
 from app.services.redbook_cli import RedbookCLI, RedbookError
@@ -57,12 +58,13 @@ SCENE_PATTERN = re.compile(
 async def lifespan(app: FastAPI):
     app.state.redbook = RedbookCLI(settings)
     app.state.analyzer = CompetitorAnalyzer(settings)
+    app.state.analysis_store = AnalysisStore(settings.analysis_storage_dir)
     app.state.note_details = {}
     yield
 
 
 app = FastAPI(
-    title="红研 · 小红书产品洞察",
+    title="AI种草官 · 小红书产品洞察",
     version="0.1.0",
     docs_url="/api/docs",
     lifespan=lifespan,
@@ -502,4 +504,28 @@ async def analyze_competitors(request: Request, body: AnalysisRequest):
             )
 
     analyzer: CompetitorAnalyzer = request.app.state.analyzer
-    return await analyzer.analyze(keyword, details)
+    analysis = await analyzer.analyze(keyword, details)
+    store: AnalysisStore = request.app.state.analysis_store
+    try:
+        artifact = store.save(analysis, details)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="无法保存本地分析 JSON，请检查 data/analyses 目录权限。",
+        ) from exc
+    analysis.artifact_id = artifact.analysis_id
+    analysis.json_download_url = f"/api/analyses/{artifact.analysis_id}/json"
+    return analysis
+
+
+@app.get("/api/analyses/{analysis_id}/json")
+async def download_analysis_json(request: Request, analysis_id: str) -> FileResponse:
+    store: AnalysisStore = request.app.state.analysis_store
+    path = store.get_path(analysis_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail="未找到该分析 JSON。")
+    return FileResponse(
+        path,
+        media_type="application/json",
+        filename=path.name,
+    )

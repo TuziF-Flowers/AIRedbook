@@ -77,17 +77,12 @@ a:focus-visible {
 }
 
 .brand-mark {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 14px;
-  color: white;
-  background: linear-gradient(145deg, #5143e8, #a45cf5);
-  box-shadow: 0 9px 24px rgba(101, 88, 245, 0.28);
-  font-size: 20px;
-  font-weight: 900;
-  transform: rotate(-6deg);
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 9px 12px rgba(101, 88, 245, 0.24));
 }
 
 .brand strong,
@@ -1503,7 +1498,7 @@ footer {
 .report-actions {
   display: grid;
   margin-top: 12px;
-  grid-template-columns: 1fr 1.2fr;
+  grid-template-columns: 1fr 1fr 1.2fr;
   gap: 9px;
 }
 

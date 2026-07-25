@@ -128,6 +128,8 @@ class CompetitorAnalysis(BaseModel):
     summary: list[str] = Field(default_factory=list)
     metrics: AnalysisMetrics = Field(default_factory=AnalysisMetrics)
     report_markdown: str = ""
+    artifact_id: str | None = None
+    json_download_url: str | None = None
 
 
 class ApiErrorBody(BaseModel):

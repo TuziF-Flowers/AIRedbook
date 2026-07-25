@@ -16,6 +16,13 @@ def _as_bool(value: str | None, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _as_project_path(value: str | None, default: Path) -> Path:
+    if not value:
+        return default
+    candidate = Path(value).expanduser()
+    return candidate if candidate.is_absolute() else PROJECT_ROOT / candidate
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     redbook_executable: str | None = os.getenv("REDBOOK_EXECUTABLE") or None
@@ -32,6 +39,10 @@ class Settings:
     ai_base_url: str = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
     ai_model: str | None = os.getenv("AI_MODEL") or None
     ai_timeout_seconds: float = float(os.getenv("AI_TIMEOUT_SECONDS", "60"))
+    analysis_storage_dir: Path = _as_project_path(
+        os.getenv("ANALYSIS_STORAGE_DIR"),
+        PROJECT_ROOT / "data" / "analyses",
+    )
 
 
 settings = Settings()

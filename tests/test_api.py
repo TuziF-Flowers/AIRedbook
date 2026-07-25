@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
 
@@ -12,6 +14,7 @@ from app.main import (
     app,
 )
 from app.models import NoteDetail, NoteStats, NoteSummary, SearchResponse
+from app.services.analysis_store import AnalysisStore
 from app.services.competitor_analyzer import CompetitorAnalyzer
 
 
@@ -56,10 +59,12 @@ class FakeRedbookCLI:
 
 @asynccontextmanager
 async def fake_lifespan(application):
-    application.state.redbook = FakeRedbookCLI()
-    application.state.analyzer = CompetitorAnalyzer(settings)
-    application.state.note_details = {}
-    yield
+    with TemporaryDirectory() as temporary_directory:
+        application.state.redbook = FakeRedbookCLI()
+        application.state.analyzer = CompetitorAnalyzer(settings)
+        application.state.analysis_store = AnalysisStore(Path(temporary_directory))
+        application.state.note_details = {}
+        yield
 
 
 def test_search_and_detail_api():
@@ -102,6 +107,17 @@ def test_search_and_detail_api():
             assert report["analysis_mode"] == "rules"
             assert report["summary"]
             assert "# 测试产品 · 小红书竞品分析报告" in report["report_markdown"]
+            assert report["artifact_id"]
+            assert report["json_download_url"]
+
+            saved_json = client.get(report["json_download_url"])
+            assert saved_json.status_code == 200
+            saved_payload = saved_json.json()
+            assert saved_payload["schema_version"] == "1.0"
+            assert saved_payload["analysis_id"] == report["artifact_id"]
+            assert saved_payload["dimensions"]["copywriting"]["framework"]
+            assert saved_payload["dimensions"]["visual"]["reference_images"]
+            assert saved_payload["source_notes"][0]["description"] == "详情正文"
 
             collection = client.post(
                 "/api/collect",
