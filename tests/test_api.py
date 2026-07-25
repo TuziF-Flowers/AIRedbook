@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
 
-from app.config import settings
+from app.config import Settings
 from app.main import (
     _filter_single_product_seeding,
     _is_allowed_image_url,
@@ -61,7 +61,9 @@ class FakeRedbookCLI:
 async def fake_lifespan(application):
     with TemporaryDirectory() as temporary_directory:
         application.state.redbook = FakeRedbookCLI()
-        application.state.analyzer = CompetitorAnalyzer(settings)
+        application.state.analyzer = CompetitorAnalyzer(
+            Settings(ai_api_key=None, ai_model=None, ai_enable_vision=False)
+        )
         application.state.analysis_store = AnalysisStore(Path(temporary_directory))
         application.state.note_details = {}
         yield
@@ -113,10 +115,11 @@ def test_search_and_detail_api():
             saved_json = client.get(report["json_download_url"])
             assert saved_json.status_code == 200
             saved_payload = saved_json.json()
-            assert saved_payload["schema_version"] == "1.0"
+            assert saved_payload["schema_version"] == "1.1"
             assert saved_payload["analysis_id"] == report["artifact_id"]
             assert saved_payload["dimensions"]["copywriting"]["framework"]
             assert saved_payload["dimensions"]["visual"]["reference_images"]
+            assert saved_payload["dimensions"]["visual"]["analysis"]["status"] == "not_requested"
             assert saved_payload["source_notes"][0]["description"] == "详情正文"
 
             collection = client.post(

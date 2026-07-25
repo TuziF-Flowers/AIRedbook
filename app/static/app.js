@@ -72,6 +72,16 @@ function setActiveSideNav(key) {
   });
 }
 
+function setPipelineStepForNav(key) {
+  const stepByNav = {
+    overview: 1,
+    collection: 2,
+    analysis: 3,
+    report: 3,
+  };
+  setStep(stepByNav[key] || 1);
+}
+
 let navFrameRequested = false;
 
 function updateSideNavFromScroll() {
@@ -90,6 +100,7 @@ function updateSideNavFromScroll() {
   }
 
   setActiveSideNav(activeKey);
+  setPipelineStepForNav(activeKey);
 }
 
 function scheduleSideNavUpdate() {
@@ -244,6 +255,44 @@ function setCollectionProgress(percent, title, meta) {
   $("#collection-progress-meta").textContent = meta;
 }
 
+let collectionProgressFrame = null;
+
+function stopCollectionProgressAnimation() {
+  if (collectionProgressFrame !== null) {
+    window.cancelAnimationFrame(collectionProgressFrame);
+    collectionProgressFrame = null;
+  }
+}
+
+function startCollectionProgressAnimation() {
+  stopCollectionProgressAnimation();
+  const startedAt = window.performance.now();
+  let lastPercent = -1;
+
+  const tick = (now) => {
+    const elapsed = now - startedAt;
+    const percent = Math.min(92, 8 + Math.floor(84 * (1 - Math.exp(-elapsed / 15000))));
+    if (percent !== lastPercent) {
+      lastPercent = percent;
+      if (percent < 30) {
+        setCollectionProgress(
+          percent,
+          "正在搜索竞品种草内容",
+          `${state.competitors.length} 个竞品 · 正在获取高互动图文`,
+        );
+      } else if (percent < 60) {
+        setCollectionProgress(percent, "正在补全笔记信息", "读取标签、封面和公开详情数据");
+      } else if (percent < 80) {
+        setCollectionProgress(percent, "正在筛选单品种草内容", "排除测评、对比、避雷和合集内容");
+      } else {
+        setCollectionProgress(percent, "正在整理竞品结果", "按互动表现排序并准备展示");
+      }
+    }
+    collectionProgressFrame = window.requestAnimationFrame(tick);
+  };
+  collectionProgressFrame = window.requestAnimationFrame(tick);
+}
+
 function sortedCollectionNotes() {
   const notes = state.activeCompetitor === "all"
     ? [...state.notes]
@@ -370,17 +419,10 @@ async function runSearch() {
   resultsSection.hidden = false;
   resultsTitle.textContent = `“${state.keyword}” 的高互动图文`;
   resultsMeta.textContent = `正在采集：${state.competitors.join("、")}`;
-  setCollectionProgress(
-    18,
-    "正在搜索竞品种草内容",
-    `${state.competitors.length} 个竞品 · 合计上限 20 篇`,
-  );
+  setCollectionProgress(8, "正在准备竞品采集", `${state.competitors.length} 个竞品 · 合计上限 20 篇`);
   resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
   scheduleSideNavUpdate();
-
-  const progressTimer = window.setTimeout(() => {
-    setCollectionProgress(68, "正在筛选与补全笔记详情", "排除测评、对比、避雷和合集内容");
-  }, 600);
+  startCollectionProgressAnimation();
 
   try {
     const response = await fetch("/api/collect", {
@@ -397,6 +439,7 @@ async function runSearch() {
     state.collectionSort = "heat";
     collectionSort.value = "heat";
     renderCollectionOverview();
+    stopCollectionProgressAnimation();
     setCollectionProgress(
       100,
       "竞品种草内容采集完成",
@@ -414,13 +457,14 @@ async function runSearch() {
       );
     }
   } catch (error) {
+    stopCollectionProgressAnimation();
     resultsGrid.replaceChildren();
     const detail = error.hint ? `${error.message} ${error.hint}` : error.message;
     showMessage(detail);
     resultsMeta.textContent = "采集未完成";
     setCollectionProgress(0, "采集未完成", "请检查登录状态或更换竞品关键词");
   } finally {
-    window.clearTimeout(progressTimer);
+    stopCollectionProgressAnimation();
     state.loading = false;
     searchButton.disabled = false;
     searchButton.firstElementChild.textContent = "开始采集";
@@ -434,6 +478,42 @@ function setAnalysisProgress(percent, title, meta) {
   $("#analysis-progress-meta").textContent = meta;
 }
 
+let analysisProgressFrame = null;
+
+function stopAnalysisProgressAnimation() {
+  if (analysisProgressFrame !== null) {
+    window.cancelAnimationFrame(analysisProgressFrame);
+    analysisProgressFrame = null;
+  }
+}
+
+function startAnalysisProgressAnimation() {
+  stopAnalysisProgressAnimation();
+  const startedAt = window.performance.now();
+  let lastPercent = -1;
+
+  const tick = (now) => {
+    const elapsed = now - startedAt;
+    const percent = Math.min(92, 10 + Math.floor(82 * (1 - Math.exp(-elapsed / 30000))));
+    if (percent !== lastPercent) {
+      lastPercent = percent;
+      if (percent < 28) {
+        setAnalysisProgress(percent, "正在整理竞品样本", `已加载 ${state.notes.length} 篇高互动图文`);
+      } else if (percent < 50) {
+        setAnalysisProgress(percent, "正在分析标题与正文", "提炼关键词、内容结构与文案表达");
+      } else if (percent < 72) {
+        setAnalysisProgress(percent, "正在分析互动与竞品表现", "汇总点赞、收藏、评论与竞品差异");
+      } else if (percent < 86) {
+        setAnalysisProgress(percent, "正在生成视觉洞察", "识别封面、视觉风格与图内文案");
+      } else {
+        setAnalysisProgress(percent, "正在生成竞品总结", "组合各维度洞察并写入本地 JSON");
+      }
+    }
+    analysisProgressFrame = window.requestAnimationFrame(tick);
+  };
+  analysisProgressFrame = window.requestAnimationFrame(tick);
+}
+
 async function runAnalysis() {
   if (state.analyzing || !state.notes.length) return;
   state.analyzing = true;
@@ -442,14 +522,12 @@ async function runAnalysis() {
   analysisSection.hidden = false;
   metricsOverview.hidden = true;
   setStep(3);
-  setAnalysisProgress(28, "正在整理竞品样本", `已加载 ${state.notes.length} 篇高互动图文`);
+  setAnalysisProgress(10, "正在准备竞品分析", `已加载 ${state.notes.length} 篇高互动图文`);
   analysisContent.innerHTML = '<div class="analysis-loading"><span>✦</span><strong>AI 正在提炼爆款规律</strong><small>分析标题、正文结构、图片数量与互动表现</small></div>';
   analysisSection.scrollIntoView({ behavior: "smooth", block: "start" });
   scheduleSideNavUpdate();
 
-  const progressTimer = window.setTimeout(() => {
-    setAnalysisProgress(72, "正在生成竞品总结", "组合标题、内容、图片与互动洞察");
-  }, 500);
+  startAnalysisProgressAnimation();
 
   try {
     const response = await fetch("/api/analyze", {
@@ -458,6 +536,7 @@ async function runAnalysis() {
       body: JSON.stringify({ keyword: state.keyword, notes: state.notes }),
     });
     state.analysis = await parseResponse(response);
+    stopAnalysisProgressAnimation();
     setAnalysisProgress(
       100,
       "竞品规律分析完成",
@@ -475,11 +554,12 @@ async function runAnalysis() {
     downloadReportButton.disabled = false;
     renderAnalysisTab(state.activeTab);
   } catch (error) {
+    stopAnalysisProgressAnimation();
     const detail = error.hint ? `${error.message} ${error.hint}` : error.message;
     analysisContent.replaceChildren(element("div", "analysis-empty error", detail));
     setAnalysisProgress(0, "分析未完成", "请检查服务配置后重试");
   } finally {
-    window.clearTimeout(progressTimer);
+    stopAnalysisProgressAnimation();
     state.analyzing = false;
     analyzeButton.disabled = false;
     analyzeButton.lastElementChild.textContent = "重新生成分析";
@@ -600,6 +680,57 @@ function renderCopywritingAnalysis(data) {
   return wrapper;
 }
 
+function renderVisualList(title, description, items, className = "") {
+  const section = element("section", `visual-list ${className}`.trim());
+  section.append(sectionTitle(title, description));
+  const list = element("ol");
+  items.forEach((item) => list.append(element("li", "", item)));
+  section.append(list);
+  return section;
+}
+
+function renderVisualAnalysis(data) {
+  const visual = data.visual_analysis;
+  if (!visual || visual.status === "not_requested" || visual.status === "unavailable") {
+    const message = visual?.status_message || "暂未启用图片视觉分析。";
+    return renderStandardTab(
+      "视觉洞察暂不可用",
+      message,
+      data.image_insights,
+    );
+  }
+
+  const wrapper = element("div", "tab-panel visual-analysis");
+  const strategy = visual.sample_strategy || {};
+  wrapper.append(
+    sectionTitle(
+      "爆款视觉洞察",
+      visual.status_message || "已基于封面与代表性配图提炼视觉规律",
+    ),
+    element(
+      "p",
+      "visual-sample-note",
+      `分析样本：${strategy.cover_notes || 0} 张封面 · ${strategy.gallery_notes || 0} 篇图集 · 实际读取 ${strategy.sampled_images || 0} 张图片`,
+    ),
+  );
+
+  if (visual.cover?.length) {
+    wrapper.append(sectionTitle("封面图维度", "构图、主体、配色与首图点击要素"), insightCards(visual.cover));
+  }
+  if (visual.cover_formulas?.length) {
+    wrapper.append(
+      renderVisualList("可直接套用的封面公式", "将以下结构替换为产品卖点与真实场景", visual.cover_formulas, "formula-list"),
+    );
+  }
+  if (visual.style?.length) {
+    wrapper.append(sectionTitle("视觉风格", "色调、滤镜、角度与光影的品类共性"), insightCards(visual.style));
+  }
+  if (visual.in_image_copy?.length) {
+    wrapper.append(sectionTitle("图内文案", "文字密度、视觉字体类别、布局与信息分层"), insightCards(visual.in_image_copy));
+  }
+  return wrapper;
+}
+
 function renderAnalysisTab(tab) {
   if (!state.analysis) return;
   const data = state.analysis;
@@ -616,11 +747,7 @@ function renderAnalysisTab(tab) {
   } else if (tab === "copywriting") {
     panel = renderCopywritingAnalysis(data);
   } else if (tab === "image") {
-    panel = renderStandardTab(
-      "图片结构分析",
-      "基于图组规模与图文组织方式生成素材建议",
-      data.image_insights,
-    );
+    panel = renderVisualAnalysis(data);
   } else if (tab === "interaction") {
     panel = renderStandardTab(
       "互动数据分析",
@@ -797,7 +924,11 @@ document.querySelectorAll("[data-tab]").forEach((button) => {
 });
 
 sideNavLinks.forEach((link) => {
-  link.addEventListener("click", () => setActiveSideNav(link.dataset.navKey));
+  link.addEventListener("click", () => {
+    const key = link.dataset.navKey;
+    setActiveSideNav(key);
+    setPipelineStepForNav(key);
+  });
 });
 window.addEventListener("scroll", scheduleSideNavUpdate, { passive: true });
 window.addEventListener("resize", scheduleSideNavUpdate);

@@ -39,6 +39,18 @@ class Settings:
     ai_base_url: str = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
     ai_model: str | None = os.getenv("AI_MODEL") or None
     ai_timeout_seconds: float = float(os.getenv("AI_TIMEOUT_SECONDS", "60"))
+    ai_enable_vision: bool = _as_bool(os.getenv("AI_ENABLE_VISION"), True)
+    ai_vision_max_covers: int = int(os.getenv("AI_VISION_MAX_COVERS", "20"))
+    ai_vision_max_gallery_notes: int = int(
+        os.getenv("AI_VISION_MAX_GALLERY_NOTES", "6")
+    )
+    ai_vision_max_images_per_note: int = int(
+        os.getenv("AI_VISION_MAX_IMAGES_PER_NOTE", "4")
+    )
+    ai_vision_max_image_bytes: int = int(
+        os.getenv("AI_VISION_MAX_IMAGE_BYTES", "550000")
+    )
+    ai_vision_image_detail: str = os.getenv("AI_VISION_IMAGE_DETAIL", "low")
     analysis_storage_dir: Path = _as_project_path(
         os.getenv("ANALYSIS_STORAGE_DIR"),
         PROJECT_ROOT / "data" / "analyses",

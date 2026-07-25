@@ -1509,6 +1509,40 @@ footer {
   line-height: 1.5;
 }
 
+.visual-sample-note {
+  margin: -4px 0 18px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.visual-list {
+  margin: 20px 0;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff, #fbfaff);
+}
+
+.visual-list .panel-heading {
+  margin-bottom: 10px;
+}
+
+.visual-list ol {
+  display: grid;
+  margin: 0;
+  padding-left: 22px;
+  gap: 9px;
+  color: #4b4a5b;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.formula-list {
+  border-color: #dcd6ff;
+  background: linear-gradient(135deg, #faf9ff, #f1efff);
+}
+
+
 .secondary-button {
   border: 1px solid var(--line);
   color: #666678;

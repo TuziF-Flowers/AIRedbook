@@ -110,6 +110,25 @@ class AnalysisMetrics(BaseModel):
     average_engagement: int = 0
 
 
+class VisualSampleStrategy(BaseModel):
+    cover_notes: int = 0
+    gallery_notes: int = 0
+    images_per_gallery_note: int = 0
+    sampled_images: int = 0
+
+
+class VisualAnalysis(BaseModel):
+    status: Literal["not_requested", "completed", "partial", "unavailable"] = (
+        "not_requested"
+    )
+    status_message: str = "未启用视觉分析。"
+    sample_strategy: VisualSampleStrategy = Field(default_factory=VisualSampleStrategy)
+    cover: list[AnalysisInsight] = Field(default_factory=list)
+    cover_formulas: list[str] = Field(default_factory=list)
+    style: list[AnalysisInsight] = Field(default_factory=list)
+    in_image_copy: list[AnalysisInsight] = Field(default_factory=list)
+
+
 class CompetitorAnalysis(BaseModel):
     keyword: str
     source_count: int
@@ -124,6 +143,7 @@ class CompetitorAnalysis(BaseModel):
     copywriting_framework: list[AnalysisInsight] = Field(default_factory=list)
     competitor_insights: list[AnalysisInsight] = Field(default_factory=list)
     image_insights: list[AnalysisInsight] = Field(default_factory=list)
+    visual_analysis: VisualAnalysis = Field(default_factory=VisualAnalysis)
     interaction_insights: list[AnalysisInsight] = Field(default_factory=list)
     summary: list[str] = Field(default_factory=list)
     metrics: AnalysisMetrics = Field(default_factory=AnalysisMetrics)

@@ -83,7 +83,7 @@ class AnalysisStore:
             if note.cover_url or note.image_urls
         ]
         return {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "analysis_id": analysis_id,
             "saved_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             "product": {
@@ -134,6 +134,7 @@ class AnalysisStore:
                         item.model_dump(mode="json")
                         for item in analysis.image_insights
                     ],
+                    "analysis": analysis.visual_analysis.model_dump(mode="json"),
                     "reference_images": visual_references,
                 },
                 "interaction": [

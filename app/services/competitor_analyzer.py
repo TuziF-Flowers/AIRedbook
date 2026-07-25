@@ -17,6 +17,7 @@ from app.models import (
     NoteDetail,
     TitleTemplate,
 )
+from app.services.vision_analyzer import VisionAnalyzer
 
 TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+#.-]{1,20}|[\u4e00-\u9fff]{2,6}")
 EMOJI_PATTERN = re.compile(
@@ -54,6 +55,7 @@ STOPWORDS = {
 class CompetitorAnalyzer:
     def __init__(self, config: Settings) -> None:
         self.config = config
+        self.vision_analyzer = VisionAnalyzer(config)
 
     async def analyze(
         self,
@@ -65,12 +67,39 @@ class CompetitorAnalyzer:
             analysis.report_markdown = self._build_markdown(analysis)
             return analysis
 
+        ai_completed = False
         try:
             ai_data = await self._request_ai(keyword, details, analysis)
             self._merge_ai_analysis(analysis, ai_data)
-            analysis.analysis_mode = "ai"
-            analysis.mode_label = f"AI 总结 · {self.config.ai_model}"
+            ai_completed = True
         except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            pass
+
+        if self.config.ai_enable_vision:
+            try:
+                visual = await self.vision_analyzer.analyze(keyword, details)
+                analysis.visual_analysis = visual
+                if visual.status in {"completed", "partial"}:
+                    visual_insights = [
+                        *visual.cover[:1],
+                        *visual.style[:1],
+                        *visual.in_image_copy[:1],
+                    ]
+                    if visual_insights:
+                        analysis.image_insights = visual_insights
+                    ai_completed = True
+            except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+                pass
+
+        if ai_completed:
+            analysis.analysis_mode = "ai"
+            vision_suffix = (
+                " · 含图片视觉洞察"
+                if analysis.visual_analysis.status in {"completed", "partial"}
+                else ""
+            )
+            analysis.mode_label = f"AI 总结 · {self.config.ai_model}{vision_suffix}"
+        else:
             analysis.mode_label = "本地洞察 · AI 服务暂不可用"
 
         analysis.report_markdown = self._build_markdown(analysis)
@@ -537,7 +566,6 @@ class CompetitorAnalyzer:
         }
         request_body = {
             "model": self.config.ai_model,
-            "temperature": 0.2,
             "messages": [
                 {
                     "role": "system",
@@ -650,10 +678,28 @@ class CompetitorAnalyzer:
             lines.extend(
                 f"- **{item.title}**：{item.description}" for item in insights
             )
+        visual = analysis.visual_analysis
+        if visual.status in {"completed", "partial"}:
+            lines.extend(["", "## 九、视觉与配图分析", ""])
+            lines.append(f"> {visual.status_message}")
+            for heading, insights in (
+                ("爆款封面规律", visual.cover),
+                ("视觉风格", visual.style),
+                ("图内文案", visual.in_image_copy),
+            ):
+                if not insights:
+                    continue
+                lines.extend(["", f"### {heading}", ""])
+                lines.extend(
+                    f"- **{item.title}**：{item.description}" for item in insights
+                )
+            if visual.cover_formulas:
+                lines.extend(["", "### 可套用封面公式", ""])
+                lines.extend(f"- {item}" for item in visual.cover_formulas)
         lines.extend(
             [
                 "",
-                "## 九、数据概览",
+                "## 十、数据概览",
                 "",
                 f"- 平均点赞：{analysis.metrics.average_likes:,}",
                 f"- 平均收藏：{analysis.metrics.average_collects:,}",
