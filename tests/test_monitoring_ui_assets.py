@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -23,7 +22,15 @@ def test_monitoring_styles_respect_reduced_motion():
 
 def test_monitoring_chart_keeps_its_live_echarts_canvas_on_control_switches():
     script = (ROOT / "app/static/app.js").read_text(encoding="utf-8")
-    chart_function = script[script.index("function renderMonitoringChart"):script.index("function openMonitoringTask")]
+    chart_function = script[
+        script.index("function renderMonitoringChart") : script.index("function openMonitoringTask")
+    ]
 
     assert "monitoringChart.replaceChildren();\n  if (snapshots.length" not in chart_function
-    assert "if (!state.monitoringChart) {\n    monitoringChart.replaceChildren();\n    state.monitoringChart = window.echarts.init(monitoringChart);\n  }" in chart_function
+    assert (
+        "if (!state.monitoringChart) {\n"
+        "    monitoringChart.replaceChildren();\n"
+        "    state.monitoringChart = window.echarts.init(monitoringChart);\n"
+        "  }"
+        in chart_function
+    )

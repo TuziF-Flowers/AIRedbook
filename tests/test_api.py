@@ -225,6 +225,19 @@ def test_image_proxy_only_accepts_xiaohongshu_cdn_hosts():
     assert not _is_allowed_image_url("https://xhscdn.com.example.com/example.webp")
 
 
+def test_echarts_bundle_is_served_locally():
+    original_lifespan = app.router.lifespan_context
+    app.router.lifespan_context = fake_lifespan
+    try:
+        with TestClient(app) as client:
+            response = client.get("/vendor/echarts/echarts.min.js")
+
+        assert response.status_code == 200
+        assert "javascript" in response.headers["content-type"]
+    finally:
+        app.router.lifespan_context = original_lifespan
+
+
 def test_search_selects_top_twenty_images_by_likes_and_collects():
     image_notes = [
         NoteSummary(

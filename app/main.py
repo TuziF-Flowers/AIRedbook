@@ -32,6 +32,7 @@ from app.services.normalizer import normalize_detail, normalize_search
 from app.services.redbook_cli import RedbookCLI, RedbookError
 
 APP_DIR = Path(__file__).resolve().parent
+ECHARTS_DIST_DIR = APP_DIR.parent / "node_modules" / "echarts" / "dist"
 templates = Jinja2Templates(directory=APP_DIR / "templates")
 IMAGE_HOST_SUFFIXES = (".xhscdn.com", ".xiaohongshu.com")
 IMAGE_HOSTS = {"xhscdn.com", "xiaohongshu.com"}
@@ -82,6 +83,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
+app.mount("/vendor/echarts", StaticFiles(directory=ECHARTS_DIST_DIR), name="echarts")
 
 
 def _service(request: Request) -> RedbookCLI:
