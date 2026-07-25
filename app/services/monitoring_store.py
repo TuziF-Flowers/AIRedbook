@@ -37,6 +37,7 @@ class MonitoringStore:
             raise MonitoringArchiveError(ARCHIVE_ERROR_MESSAGE) from error
 
     def save(self, archive: MonitoringArchive) -> None:
+        archive = MonitoringArchive.model_validate(archive.model_dump())
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary_path = self.path.with_suffix(".json.tmp")
         temporary_path.write_text(

@@ -4,7 +4,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 
 def _require_timezone(value: datetime | None) -> datetime | None:
@@ -151,6 +151,8 @@ class MonitoringTaskStatus(StrEnum):
 
 
 class InteractionSnapshot(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
     collected_at: datetime
     likes: int = Field(ge=0)
     collects: int = Field(ge=0)
@@ -163,6 +165,8 @@ class InteractionSnapshot(BaseModel):
 
 
 class MonitoringTask(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
     task_id: str
     note_id: str
     web_url: str

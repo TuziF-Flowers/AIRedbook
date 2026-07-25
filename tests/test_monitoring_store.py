@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.models import InteractionSnapshot, MonitoringTask
+from app.models import InteractionSnapshot, MonitoringArchive, MonitoringTask
 from app.services.monitoring_store import MonitoringArchiveError, MonitoringStore
 
 
@@ -55,14 +55,35 @@ def test_store_upsert_keeps_one_task_for_the_same_note_id(tmp_path):
     assert [task.task_id for task in store.load().tasks] == ["task-1"]
 
 
-def test_monitoring_models_reject_naive_timestamps():
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "collected_at",
+        "created_at",
+        "monitoring_starts_at",
+        "last_collected_at",
+        "last_error_at",
+    ],
+)
+def test_monitoring_models_reject_naive_timestamps_after_assignment_and_before_save(
+    tmp_path, field_name
+):
+    task = make_task()
+    naive_time = datetime(2026, 7, 25, 10, 0)
+    target = task.snapshots[0] if field_name == "collected_at" else task
+
     with pytest.raises(ValueError, match="时区"):
-        InteractionSnapshot(
-            collected_at=datetime(2026, 7, 25, 10, 0),
-            likes=12,
-            collects=3,
-            comments=1,
+        setattr(target, field_name, naive_time)
+
+    if field_name == "collected_at":
+        task.snapshots[0] = task.snapshots[0].model_copy(
+            update={field_name: naive_time}
         )
+    else:
+        task = task.model_copy(update={field_name: naive_time})
+
+    with pytest.raises(ValueError, match="时区"):
+        MonitoringStore(tmp_path / "monitoring.json").save(MonitoringArchive(tasks=[task]))
 
 
 def test_store_deletes_task(tmp_path):
