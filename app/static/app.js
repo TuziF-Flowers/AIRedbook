@@ -30,6 +30,16 @@ const sideNavLinks = Array.from(document.querySelectorAll(".side-nav [data-nav-k
 const competitorTabs = $("#competitor-tabs");
 const collectionSort = $("#collection-sort");
 const hotTagList = $("#hot-tag-list");
+const monitoringSection = $("#monitoring");
+const monitoringCreateForm = $("#monitoring-create-form");
+const monitoringUrlInput = $("#monitoring-url");
+const monitoringMessage = $("#monitoring-message");
+const monitoringTaskList = $("#monitoring-task-list");
+const monitoringDashboard = $("#monitoring-dashboard");
+const monitoringMetricCards = $("#monitoring-metric-cards");
+const monitoringChart = $("#monitoring-chart");
+const monitoringRefreshButton = $("#monitoring-refresh");
+const monitoringDeleteButton = $("#monitoring-delete");
 
 const state = {
   keyword: "",
@@ -41,6 +51,11 @@ const state = {
   activeTab: "title",
   activeCompetitor: "all",
   collectionSort: "heat",
+  monitoringTasks: [],
+  monitoringTask: null,
+  monitoringMetric: "likes",
+  monitoringRange: "30d",
+  monitoringChart: null,
 };
 
 function element(tag, className, text) {
@@ -86,6 +101,7 @@ function updateSideNavFromScroll() {
   if (!metricsOverview.hidden && metricsOverview.offsetTop <= marker) {
     activeKey = "report";
   }
+  if (monitoringSection.offsetTop <= marker) activeKey = "monitoring";
 
   setActiveSideNav(activeKey);
 }
@@ -710,6 +726,223 @@ function renderDetail(detail) {
   detailContent.replaceChildren(layout);
 }
 
+function monitoringTaskId(task) {
+  return task?.id || task?.task_id || "";
+}
+
+function monitoringSnapshots(task) {
+  return [...(task?.snapshots || [])].sort(
+    (left, right) => new Date(left.collected_at) - new Date(right.collected_at),
+  );
+}
+
+function monitoringMetricValue(snapshot, metric = state.monitoringMetric) {
+  return Number(snapshot?.[metric] || 0);
+}
+
+function showMonitoringMessage(text, kind = "error") {
+  monitoringMessage.hidden = false;
+  monitoringMessage.className = `monitoring-message ${kind}`;
+  monitoringMessage.textContent = text;
+}
+
+function hideMonitoringMessage() {
+  monitoringMessage.hidden = true;
+  monitoringMessage.textContent = "";
+}
+
+function formatMonitoringDate(value) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "numeric",
+    day: "numeric",
+  }).format(new Date(value));
+}
+
+function visibleMonitoringSnapshots(task) {
+  const snapshots = monitoringSnapshots(task);
+  if (state.monitoringRange === "all" || !snapshots.length) return snapshots;
+  const days = state.monitoringRange === "7d" ? 7 : 30;
+  const latest = new Date(snapshots[snapshots.length - 1].collected_at);
+  const threshold = new Date(latest);
+  threshold.setDate(threshold.getDate() - (days - 1));
+  return snapshots.filter((snapshot) => new Date(snapshot.collected_at) >= threshold);
+}
+
+function renderMonitoringMetricCards(task) {
+  monitoringMetricCards.replaceChildren();
+  const latest = monitoringSnapshots(task).at(-1);
+  [
+    ["likes", "点赞"],
+    ["collects", "收藏"],
+    ["comments", "评论"],
+  ].forEach(([metric, label]) => {
+    const card = element("button", `monitoring-metric-card${metric === state.monitoringMetric ? " active" : ""}`);
+    card.type = "button";
+    card.dataset.monitoringMetric = metric;
+    card.append(element("span", "", label), element("strong", "", formatCount(monitoringMetricValue(latest, metric))));
+    monitoringMetricCards.append(card);
+  });
+}
+
+function renderMonitoringTasks() {
+  monitoringTaskList.replaceChildren();
+  if (!state.monitoringTasks.length) {
+    monitoringTaskList.append(element("p", "monitoring-empty", "尚未创建监测任务。"));
+    return;
+  }
+  state.monitoringTasks.forEach((task) => {
+    const active = monitoringTaskId(task) === monitoringTaskId(state.monitoringTask);
+    const card = element("button", `monitoring-task-card${active ? " active" : ""}`);
+    card.type = "button";
+    card.append(
+      element("strong", "", task.title || task.note_title || "已发布笔记"),
+      element("span", "", task.status === "failed" ? "更新失败" : "监测中"),
+      element("small", "", `${monitoringSnapshots(task).length} 条快照`),
+    );
+    card.addEventListener("click", () => openMonitoringTask(task));
+    monitoringTaskList.append(card);
+  });
+}
+
+function renderMonitoringChart(task) {
+  const snapshots = visibleMonitoringSnapshots(task);
+  monitoringChart.replaceChildren();
+  if (snapshots.length < 2) {
+    monitoringChart.append(
+      element(
+        "p",
+        "monitoring-chart-empty",
+        snapshots.length
+          ? "已记录首个快照，下一次更新后将展示趋势。"
+          : "暂无互动快照，更新任务后将展示趋势。",
+      ),
+    );
+    return;
+  }
+  if (!window.echarts) {
+    monitoringChart.append(element("p", "monitoring-chart-empty", "图表组件尚未加载。"));
+    return;
+  }
+  if (!state.monitoringChart) state.monitoringChart = window.echarts.init(monitoringChart);
+  const labels = snapshots.map((snapshot) => formatMonitoringDate(snapshot.collected_at));
+  const values = snapshots.map((snapshot) => monitoringMetricValue(snapshot));
+  const option = {
+    animation: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    tooltip: {
+      trigger: "axis",
+      formatter: (items) => {
+        const index = items[0]?.dataIndex || 0;
+        const value = values[index];
+        const delta = index ? value - values[index - 1] : null;
+        const change = delta === null ? "首个可见快照" : `较前次 ${delta >= 0 ? "+" : ""}${delta}`;
+        return `${labels[index]}（北京时间）<br />${items[0]?.marker || ""}${items[0]?.seriesName || "互动"}：${value}<br />${change}`;
+      },
+    },
+    xAxis: { type: "category", data: labels },
+    yAxis: { type: "value", minInterval: 1 },
+    dataZoom: [{ type: "inside" }, { type: "slider", height: 18 }],
+    series: [{
+      name: { likes: "点赞", collects: "收藏", comments: "评论" }[state.monitoringMetric],
+      type: "line",
+      smooth: true,
+      areaStyle: { opacity: 0.16 },
+      data: values,
+    }],
+  };
+  state.monitoringChart.setOption(option, true);
+}
+
+function openMonitoringTask(task) {
+  state.monitoringTask = task;
+  monitoringDashboard.hidden = false;
+  renderMonitoringTasks();
+  renderMonitoringMetricCards(task);
+  document.querySelectorAll("[data-monitoring-metric]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.monitoringMetric === state.monitoringMetric);
+  });
+  document.querySelectorAll("[data-monitoring-range]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.monitoringRange === state.monitoringRange);
+  });
+  renderMonitoringChart(task);
+}
+
+async function loadMonitoringTasks() {
+  try {
+    const response = await fetch("/api/monitoring/tasks");
+    const data = await parseResponse(response);
+    state.monitoringTasks = Array.isArray(data) ? data : data.tasks || data.items || [];
+    const selected = state.monitoringTasks.find(
+      (task) => monitoringTaskId(task) === monitoringTaskId(state.monitoringTask),
+    );
+    renderMonitoringTasks();
+    if (selected) openMonitoringTask(selected);
+    else if (!state.monitoringTask) {
+      const firstActive = state.monitoringTasks.find((task) => task.status !== "deleted" && task.status !== "completed");
+      if (firstActive) openMonitoringTask(firstActive);
+    }
+  } catch (error) {
+    showMonitoringMessage(error.hint ? `${error.message} ${error.hint}` : error.message);
+  }
+}
+
+async function createMonitoringTask() {
+  const webUrl = monitoringUrlInput.value.trim();
+  if (!webUrl) return;
+  hideMonitoringMessage();
+  try {
+    const response = await fetch("/api/monitoring/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ web_url: webUrl }),
+    });
+    const data = await parseResponse(response);
+    const task = data.task || data;
+    state.monitoringTask = task;
+    monitoringUrlInput.value = "";
+    await loadMonitoringTasks();
+    openMonitoringTask(state.monitoringTasks.find((item) => monitoringTaskId(item) === monitoringTaskId(task)) || task);
+  } catch (error) {
+    showMonitoringMessage(error.hint ? `${error.message} ${error.hint}` : error.message);
+  }
+}
+
+async function refreshMonitoringTask() {
+  const id = monitoringTaskId(state.monitoringTask);
+  if (!id) return;
+  hideMonitoringMessage();
+  monitoringRefreshButton.disabled = true;
+  try {
+    const response = await fetch(`/api/monitoring/tasks/${encodeURIComponent(id)}/refresh`, { method: "POST" });
+    const data = await parseResponse(response);
+    state.monitoringTask = data.task || data;
+    await loadMonitoringTasks();
+  } catch (error) {
+    showMonitoringMessage(error.hint ? `${error.message} ${error.hint}` : error.message);
+  } finally {
+    monitoringRefreshButton.disabled = false;
+  }
+}
+
+async function deleteMonitoringTask() {
+  const id = monitoringTaskId(state.monitoringTask);
+  if (!id || !window.confirm("删除后将永久移除该任务及全部历史快照，确定继续吗？")) return;
+  hideMonitoringMessage();
+  try {
+    const response = await fetch(`/api/monitoring/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await parseResponse(response);
+    state.monitoringTask = null;
+    monitoringDashboard.hidden = true;
+    if (state.monitoringChart) {
+      state.monitoringChart.dispose();
+      state.monitoringChart = null;
+    }
+    await loadMonitoringTasks();
+  } catch (error) {
+    showMonitoringMessage(error.hint ? `${error.message} ${error.hint}` : error.message);
+  }
+}
+
 async function loadSession() {
   try {
     const response = await fetch("/api/session");
@@ -782,7 +1015,10 @@ sideNavLinks.forEach((link) => {
   link.addEventListener("click", () => setActiveSideNav(link.dataset.navKey));
 });
 window.addEventListener("scroll", scheduleSideNavUpdate, { passive: true });
-window.addEventListener("resize", scheduleSideNavUpdate);
+window.addEventListener("resize", () => {
+  scheduleSideNavUpdate();
+  state.monitoringChart?.resize();
+});
 
 analyzeButton.addEventListener("click", runAnalysis);
 copyReportButton.addEventListener("click", async () => {
@@ -798,6 +1034,25 @@ closeDialogButton.addEventListener("click", () => dialog.close());
 dialog.addEventListener("click", (event) => {
   if (event.target === dialog) dialog.close();
 });
+monitoringCreateForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  createMonitoringTask();
+});
+document.querySelectorAll("[data-monitoring-metric]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.monitoringMetric = button.dataset.monitoringMetric;
+    if (state.monitoringTask) openMonitoringTask(state.monitoringTask);
+  });
+});
+document.querySelectorAll("[data-monitoring-range]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.monitoringRange = button.dataset.monitoringRange;
+    if (state.monitoringTask) openMonitoringTask(state.monitoringTask);
+  });
+});
+monitoringRefreshButton.addEventListener("click", refreshMonitoringTask);
+monitoringDeleteButton.addEventListener("click", deleteMonitoringTask);
 
 loadSession();
+loadMonitoringTasks();
 scheduleSideNavUpdate();
