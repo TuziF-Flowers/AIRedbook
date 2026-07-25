@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -12,6 +13,14 @@ ARCHIVE_ERROR_MESSAGE = "本地监测档案无法读取，请先备份并检查 
 
 class MonitoringArchiveError(RuntimeError):
     pass
+
+
+def _is_pending_note_id(note_id: str) -> bool:
+    try:
+        UUID(note_id)
+    except ValueError:
+        return False
+    return True
 
 
 class MonitoringStore:
@@ -45,6 +54,11 @@ class MonitoringStore:
             if existing_task.task_id == task.task_id:
                 archive.tasks[index] = task
                 break
+            if (
+                existing_task.note_id == task.note_id
+                and not _is_pending_note_id(task.note_id)
+            ):
+                return existing_task
         else:
             archive.tasks.append(task)
         self.save(archive)

@@ -7,6 +7,12 @@ from typing import Literal
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
+def _require_timezone(value: datetime | None) -> datetime | None:
+    if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+        raise ValueError("监测时间必须包含时区信息")
+    return value
+
+
 class Author(BaseModel):
     id: str = ""
     nickname: str = "未知作者"
@@ -150,6 +156,11 @@ class InteractionSnapshot(BaseModel):
     collects: int = Field(ge=0)
     comments: int = Field(ge=0)
 
+    @field_validator("collected_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        return _require_timezone(value)
+
 
 class MonitoringTask(BaseModel):
     task_id: str
@@ -164,6 +175,16 @@ class MonitoringTask(BaseModel):
     last_collected_at: datetime | None = None
     last_error: str | None = None
     last_error_at: datetime | None = None
+
+    @field_validator(
+        "created_at",
+        "monitoring_starts_at",
+        "last_collected_at",
+        "last_error_at",
+    )
+    @classmethod
+    def require_timezone(cls, value: datetime | None) -> datetime | None:
+        return _require_timezone(value)
 
 
 class MonitoringTaskCreate(BaseModel):
