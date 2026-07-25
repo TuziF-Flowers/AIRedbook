@@ -7,6 +7,8 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from fastapi import FastAPI, Query, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -16,16 +18,21 @@ from app.models import (
     AnalysisRequest,
     ApiErrorBody,
     CompetitorCollectionRequest,
+    MonitoringTask,
+    MonitoringTaskCreate,
     NoteDetail,
     NoteDetailRequest,
     NoteSummary,
     SearchResponse,
 )
 from app.services.competitor_analyzer import CompetitorAnalyzer
+from app.services.monitoring_service import MonitoringService
+from app.services.monitoring_store import MonitoringArchiveError, MonitoringStore
 from app.services.normalizer import normalize_detail, normalize_search
 from app.services.redbook_cli import RedbookCLI, RedbookError
 
 APP_DIR = Path(__file__).resolve().parent
+ECHARTS_DIST_DIR = APP_DIR.parent / "node_modules" / "echarts" / "dist"
 templates = Jinja2Templates(directory=APP_DIR / "templates")
 IMAGE_HOST_SUFFIXES = (".xhscdn.com", ".xiaohongshu.com")
 IMAGE_HOSTS = {"xhscdn.com", "xiaohongshu.com"}
@@ -58,7 +65,15 @@ async def lifespan(app: FastAPI):
     app.state.redbook = RedbookCLI(settings)
     app.state.analyzer = CompetitorAnalyzer(settings)
     app.state.note_details = {}
-    yield
+    app.state.monitoring = MonitoringService(
+        app.state.redbook,
+        MonitoringStore(settings.monitoring_data_file),
+    )
+    await app.state.monitoring.start_scheduler()
+    try:
+        yield
+    finally:
+        await app.state.monitoring.stop_scheduler()
 
 
 app = FastAPI(
@@ -68,10 +83,27 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
+app.mount("/vendor/echarts", StaticFiles(directory=ECHARTS_DIST_DIR), name="echarts")
 
 
 def _service(request: Request) -> RedbookCLI:
     return request.app.state.redbook
+
+
+def _monitoring(request: Request) -> MonitoringService:
+    return request.app.state.monitoring
+
+
+def _is_allowed_note_url(url: str) -> bool:
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or "").lower()
+    allowed = (
+        hostname == "xiaohongshu.com"
+        or hostname.endswith(".xiaohongshu.com")
+        or hostname == "rednote.com"
+        or hostname.endswith(".rednote.com")
+    )
+    return parsed.scheme == "https" and allowed
 
 
 def _is_allowed_image_url(url: str) -> bool:
@@ -186,6 +218,46 @@ async def _enrich_preview_images(
 async def handle_redbook_error(_: Request, exc: RedbookError) -> JSONResponse:
     body = ApiErrorBody(code=exc.code, message=exc.message, hint=exc.hint)
     return JSONResponse(status_code=exc.status_code, content=body.model_dump())
+
+
+def _monitoring_archive_error_response(exc: Exception) -> JSONResponse:
+    body = ApiErrorBody(
+        code="MONITORING_ARCHIVE_UNAVAILABLE",
+        message=str(exc),
+        hint="请先备份并检查本地监测档案。",
+    )
+    return JSONResponse(status_code=503, content=body.model_dump())
+
+
+@app.exception_handler(MonitoringArchiveError)
+async def handle_monitoring_archive_error(
+    _: Request, exc: MonitoringArchiveError
+) -> JSONResponse:
+    return _monitoring_archive_error_response(exc)
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_request_validation_error(
+    request: Request, exc: RequestValidationError
+) -> Response:
+    if request.url.path == "/api/monitoring/tasks":
+        body = ApiErrorBody(
+            code="INVALID_NOTE_URL",
+            message="只支持小红书或 RedNote 的 HTTPS 笔记链接。",
+            hint=None,
+        )
+        return JSONResponse(status_code=422, content=body.model_dump())
+    return await request_validation_exception_handler(request, exc)
+
+
+@app.exception_handler(KeyError)
+async def handle_missing_monitoring_task(_: Request, exc: KeyError) -> JSONResponse:
+    body = ApiErrorBody(
+        code="MONITORING_TASK_NOT_FOUND",
+        message="未找到监测任务。",
+        hint=None,
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -401,15 +473,7 @@ async def collect_competitors(
 @app.post("/api/notes/detail")
 async def note_detail(request: Request, body: NoteDetailRequest):
     web_url = str(body.web_url)
-    parsed = urlparse(web_url)
-    hostname = (parsed.hostname or "").lower()
-    allowed = (
-        hostname == "xiaohongshu.com"
-        or hostname.endswith(".xiaohongshu.com")
-        or hostname == "rednote.com"
-        or hostname.endswith(".rednote.com")
-    )
-    if parsed.scheme != "https" or not allowed:
+    if not _is_allowed_note_url(web_url):
         return JSONResponse(
             status_code=422,
             content={
@@ -434,6 +498,63 @@ async def note_detail(request: Request, body: NoteDetailRequest):
             "笔记详情数据不完整。",
             hint="该笔记可能已删除、不可见或需要重新登录。",
         ) from exc
+
+
+@app.get("/api/monitoring/tasks")
+async def list_monitoring_tasks(request: Request) -> list[MonitoringTask]:
+    try:
+        return _monitoring(request).list_tasks()
+    except (MonitoringArchiveError, OSError) as exc:
+        return _monitoring_archive_error_response(exc)
+
+
+@app.post("/api/monitoring/tasks", status_code=201)
+async def create_monitoring_task(
+    request: Request, body: MonitoringTaskCreate
+) -> Response:
+    web_url = str(body.web_url)
+    if not _is_allowed_note_url(web_url):
+        body = ApiErrorBody(
+            code="INVALID_NOTE_URL",
+            message="只支持小红书或 RedNote 的 HTTPS 笔记链接。",
+            hint=None,
+        )
+        return JSONResponse(status_code=422, content=body.model_dump())
+
+    try:
+        task, created = await _monitoring(request).create(web_url)
+    except (MonitoringArchiveError, OSError) as exc:
+        return _monitoring_archive_error_response(exc)
+    return JSONResponse(
+        status_code=201 if created else 200,
+        content=task.model_dump(mode="json"),
+    )
+
+
+@app.get("/api/monitoring/tasks/{task_id}")
+async def get_monitoring_task(request: Request, task_id: str) -> MonitoringTask:
+    try:
+        return _monitoring(request).get(task_id)
+    except (MonitoringArchiveError, OSError) as exc:
+        return _monitoring_archive_error_response(exc)
+
+
+@app.post("/api/monitoring/tasks/{task_id}/refresh")
+async def refresh_monitoring_task(request: Request, task_id: str) -> MonitoringTask:
+    try:
+        return await _monitoring(request).refresh(task_id)
+    except (MonitoringArchiveError, OSError) as exc:
+        return _monitoring_archive_error_response(exc)
+
+
+@app.delete("/api/monitoring/tasks/{task_id}", status_code=204)
+async def delete_monitoring_task(request: Request, task_id: str) -> Response:
+    try:
+        if not await _monitoring(request).delete(task_id):
+            raise KeyError(task_id)
+    except (MonitoringArchiveError, OSError) as exc:
+        return _monitoring_archive_error_response(exc)
+    return Response(status_code=204)
 
 
 @app.post("/api/analyze")

@@ -32,6 +32,9 @@ class Settings:
     ai_base_url: str = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
     ai_model: str | None = os.getenv("AI_MODEL") or None
     ai_timeout_seconds: float = float(os.getenv("AI_TIMEOUT_SECONDS", "60"))
+    monitoring_data_file: Path = Path(
+        os.getenv("MONITORING_DATA_FILE", PROJECT_ROOT / "data" / "monitoring.json")
+    )
 
 
 settings = Settings()

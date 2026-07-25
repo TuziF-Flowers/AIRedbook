@@ -8,5 +8,6 @@ htmlcov/
 .coverage
 node_modules/
 .redbook/
+/data/monitoring.json
 .worktrees/
 .superpowers/sdd/

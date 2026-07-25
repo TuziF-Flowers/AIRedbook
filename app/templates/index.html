@@ -9,6 +9,8 @@
     />
     <title>红研 AI · 小红书竞品分析</title>
     <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+    <script src="/vendor/echarts/echarts.min.js"></script>
+    <script defer src="{{ url_for('static', path='/monitoring_view.js') }}"></script>
     <script defer src="{{ url_for('static', path='/app.js') }}"></script>
   </head>
   <body>
@@ -29,6 +31,7 @@
           <a href="#collection" data-nav-key="collection"><span>▣</span>竞品采集</a>
           <a href="#analysis" data-nav-key="analysis"><span>✦</span>AI 分析</a>
           <a href="#metrics-overview" data-nav-key="report"><span>≡</span>分析报告</a>
+          <a href="#monitoring" data-nav-key="monitoring"><span>◌</span>发布效果监测</a>
         </nav>
 
         <div class="local-card">
@@ -267,6 +270,41 @@
             </div>
             <div id="metrics-overview-content"></div>
           </section>
+        </section>
+
+        <section id="monitoring" class="monitoring-section">
+          <div class="monitoring-heading">
+            <div>
+              <p class="eyebrow">POST PERFORMANCE</p>
+              <h2>发布效果监测</h2>
+              <p>每日记录已发布笔记的公开互动数据，连续监测 30 天。</p>
+            </div>
+          </div>
+          <form id="monitoring-create-form" class="monitoring-create-form">
+            <label for="monitoring-url">已发布笔记链接</label>
+            <input id="monitoring-url" name="web_url" type="url" required placeholder="粘贴小红书或 RedNote 笔记链接" />
+            <button class="gradient-button" type="submit">新建监测任务</button>
+          </form>
+          <div id="monitoring-message" role="status" hidden></div>
+          <div id="monitoring-task-list" class="monitoring-task-list"></div>
+          <article id="monitoring-dashboard" class="monitoring-dashboard" hidden>
+            <div id="monitoring-metric-cards"></div>
+            <div id="monitoring-metric-tabs" role="tablist">
+              <button data-monitoring-metric="likes" type="button">点赞</button>
+              <button data-monitoring-metric="collects" type="button">收藏</button>
+              <button data-monitoring-metric="comments" type="button">评论</button>
+            </div>
+            <div id="monitoring-range-tabs" role="tablist">
+              <button data-monitoring-range="7d" type="button">近 7 天</button>
+              <button data-monitoring-range="30d" type="button">近 30 天</button>
+              <button data-monitoring-range="all" type="button">全部监测期</button>
+            </div>
+            <div class="monitoring-actions">
+              <button id="monitoring-refresh" type="button">立即更新</button>
+              <button id="monitoring-delete" type="button">删除任务</button>
+            </div>
+            <div id="monitoring-chart" class="monitoring-chart" aria-label="互动趋势图"></div>
+          </article>
         </section>
 
         <footer>
