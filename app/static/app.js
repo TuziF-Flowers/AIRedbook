@@ -805,26 +805,31 @@ function renderMonitoringTasks() {
   });
 }
 
+function renderMonitoringChartMessage(message) {
+  state.monitoringChart?.dispose();
+  state.monitoringChart = null;
+  monitoringChart.replaceChildren();
+  monitoringChart.append(element("p", "monitoring-chart-empty", message));
+}
+
 function renderMonitoringChart(task) {
   const snapshots = visibleMonitoringSnapshots(task);
-  monitoringChart.replaceChildren();
   if (snapshots.length < 2) {
-    monitoringChart.append(
-      element(
-        "p",
-        "monitoring-chart-empty",
-        snapshots.length
-          ? "已记录首个快照，下一次更新后将展示趋势。"
-          : "暂无互动快照，更新任务后将展示趋势。",
-      ),
+    renderMonitoringChartMessage(
+      snapshots.length
+        ? "已记录首个快照，下一次更新后将展示趋势。"
+        : "暂无互动快照，更新任务后将展示趋势。",
     );
     return;
   }
   if (!window.echarts) {
-    monitoringChart.append(element("p", "monitoring-chart-empty", "图表组件尚未加载。"));
+    renderMonitoringChartMessage("图表组件尚未加载。");
     return;
   }
-  if (!state.monitoringChart) state.monitoringChart = window.echarts.init(monitoringChart);
+  if (!state.monitoringChart) {
+    monitoringChart.replaceChildren();
+    state.monitoringChart = window.echarts.init(monitoringChart);
+  }
   const labels = snapshots.map((snapshot) => formatMonitoringDate(snapshot.collected_at));
   const values = snapshots.map((snapshot) => monitoringMetricValue(snapshot));
   const option = {
