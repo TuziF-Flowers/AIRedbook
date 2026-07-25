@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="采集小红书高互动图文笔记，并生成产品竞品内容分析与 AI 总结。"
+    />
+    <title>红研 AI · 小红书竞品分析</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+    <script defer src="{{ url_for('static', path='/app.js') }}"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="红研 AI 首页">
+          <span class="brand-mark">研</span>
+          <span>
+            <strong>红研 AI</strong>
+            <small>产品内容洞察</small>
+          </span>
+        </a>
+
+        <nav class="side-nav" aria-label="主要功能">
+          <a class="active" href="#overview" data-nav-key="overview" aria-current="page">
+            <span>⌂</span>工作台
+          </a>
+          <a href="#collection" data-nav-key="collection"><span>▣</span>竞品采集</a>
+          <a href="#analysis" data-nav-key="analysis"><span>✦</span>AI 分析</a>
+          <a href="#metrics-overview" data-nav-key="report"><span>≡</span>分析报告</a>
+        </nav>
+
+        <div class="local-card">
+          <span class="local-icon">◆</span>
+          <strong>本地安全模式</strong>
+          <p>使用本机登录态，分析结果不做持久化。</p>
+          <ul>
+            <li>只采集单品种草图文</li>
+            <li>排除测评、对比和合集</li>
+            <li>详情优先复用缓存</li>
+            <li>验证码触发即停止</li>
+          </ul>
+        </div>
+      </aside>
+
+      <main class="workspace" id="workspace">
+        <header class="topbar">
+          <ol class="pipeline" aria-label="分析流程">
+            <li class="active" data-step="1">
+              <span>1</span>
+              <div><strong>信息录入</strong><small>填写产品信息</small></div>
+            </li>
+            <li data-step="2">
+              <span>2</span>
+              <div><strong>竞品采集</strong><small>获取爆款内容</small></div>
+            </li>
+            <li data-step="3">
+              <span>3</span>
+              <div><strong>AI 分析</strong><small>总结爆款规律</small></div>
+            </li>
+          </ol>
+          <div id="session-status" class="session-badge" aria-live="polite">
+            <span class="status-dot"></span>
+            <span>检查登录状态</span>
+          </div>
+        </header>
+
+        <section id="overview" class="search-area">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">COMPETITOR INTELLIGENCE</p>
+              <h1>把高互动笔记，变成<span>可执行的内容策略</span></h1>
+              <p>输入产品、品牌或品类词，优先采集高互动的单品种草图文，自动排除测评、对比、避雷和合集内容。</p>
+            </div>
+            <div class="heading-stat">
+              <strong>Top 20</strong>
+              <span>单品种草优先 · 点赞收藏排序</span>
+            </div>
+          </div>
+
+          <form id="search-form" class="search-panel competitor-form">
+            <div class="form-card">
+              <label class="form-label" for="keyword">产品或品类名称</label>
+              <div class="search-field">
+                <span class="search-icon" aria-hidden="true"></span>
+                <input
+                  id="keyword"
+                  name="keyword"
+                  type="search"
+                  maxlength="80"
+                  autocomplete="off"
+                  placeholder="例如：AI 眼镜、胶囊咖啡机"
+                  required
+                />
+              </div>
+              <small>用于生成整体竞品分析报告</small>
+            </div>
+
+            <div class="form-card">
+              <label class="form-label" for="competitor-input">竞品标签（最多 3 个）</label>
+              <div id="competitor-chip-input" class="chip-input">
+                <div id="competitor-chips" class="competitor-chips"></div>
+                <input
+                  id="competitor-input"
+                  type="text"
+                  maxlength="40"
+                  autocomplete="off"
+                  placeholder="输入品牌或型号后按回车"
+                />
+                <button id="add-competitor" type="button" aria-label="添加竞品">＋</button>
+              </div>
+              <small>合计最多采集 20 篇，系统自动分配每个竞品的名额</small>
+            </div>
+
+            <div class="search-actions">
+              <span class="strategy-pill">单品种草图文 · 排除测评/对比 · 第一页</span>
+              <button id="search-button" class="primary-button" type="submit">
+                <span>开始采集</span><span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </form>
+
+          <div class="quick-searches" aria-label="搜索示例">
+            <span>热门示例</span>
+            <button type="button" data-keyword="AI 眼镜">AI 眼镜</button>
+            <button type="button" data-keyword="扫地机器人">扫地机器人</button>
+            <button type="button" data-keyword="咖啡机">咖啡机</button>
+          </div>
+        </section>
+
+        <section id="collection" class="results-section" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">COLLECTION</p>
+              <h2 id="results-title">竞品采集结果</h2>
+              <p id="results-meta" class="section-description"></p>
+            </div>
+            <button id="analyze-button" class="gradient-button" type="button" disabled>
+              <span>✦</span><span>生成 AI 竞品总结</span>
+            </button>
+          </div>
+
+          <div class="collection-overview">
+            <div class="collection-progress-copy">
+              <span class="progress-icon">✓</span>
+              <div>
+                <strong id="collection-progress-title">等待开始采集</strong>
+                <small id="collection-progress-meta">最多 3 个竞品，合计 20 篇</small>
+              </div>
+              <span id="collection-progress-percent">0%</span>
+              <div class="collection-progress-track">
+                <span id="collection-progress-fill"></span>
+              </div>
+            </div>
+            <div class="collection-rules">
+              <strong>采集规则</strong>
+              <span>✓ 仅单品种草图文</span>
+              <span>✓ 排除测评、对比和合集</span>
+              <span>✓ 竞品分别搜索、统一去重</span>
+            </div>
+          </div>
+
+          <div class="collection-toolbar">
+            <div id="competitor-tabs" class="competitor-tabs" aria-label="竞品筛选"></div>
+            <label class="sort-control">
+              <span>排序</span>
+              <select id="collection-sort">
+                <option value="heat">综合热度</option>
+                <option value="likes">点赞数</option>
+                <option value="collects">收藏数</option>
+                <option value="comments">评论数</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="collection-layout">
+            <aside class="collection-sidebar">
+              <div class="sidebar-block">
+                <div class="sidebar-block-heading">
+                  <div><strong>采集概览</strong><small id="collection-updated-at">等待采集</small></div>
+                </div>
+                <div class="collection-stat-grid">
+                  <div><strong id="collected-count">0</strong><span>已采集帖子</span></div>
+                  <div><strong id="total-likes">0</strong><span>总点赞</span></div>
+                  <div><strong id="total-collects">0</strong><span>总收藏</span></div>
+                  <div><strong id="total-comments">0</strong><span>总评论</span></div>
+                </div>
+              </div>
+              <div class="sidebar-block">
+                <div class="sidebar-block-heading">
+                  <div><strong>热门标签 TOP10</strong><small>来自笔记公开标签</small></div>
+                </div>
+                <div id="hot-tag-list" class="hot-tag-list">
+                  <span class="empty-tags">采集后生成热门标签</span>
+                </div>
+              </div>
+            </aside>
+
+            <div class="collection-feed">
+              <div id="message" class="message" role="status" hidden></div>
+              <div id="results-grid" class="results-grid" aria-live="polite"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="analysis" class="analysis-section" hidden>
+          <div class="analysis-progress">
+            <div>
+              <span class="progress-icon">✦</span>
+              <div>
+                <strong id="analysis-progress-title">正在分析爆款规律</strong>
+                <small id="analysis-progress-meta">准备样本数据</small>
+              </div>
+            </div>
+            <span id="analysis-progress-percent" class="progress-percent">0%</span>
+            <div class="progress-track"><span id="progress-fill"></span></div>
+          </div>
+
+          <div class="analysis-layout">
+            <div class="analysis-main">
+              <div class="analysis-tabs" role="tablist" aria-label="分析维度">
+                <button class="active" data-tab="title" type="button" role="tab">A　标题分析</button>
+                <button data-tab="content" type="button" role="tab">▤　正文结构</button>
+                <button data-tab="copywriting" type="button" role="tab">✎　文案内容</button>
+                <button data-tab="image" type="button" role="tab">▧　图片结构</button>
+                <button data-tab="interaction" type="button" role="tab">▦　互动数据</button>
+                <button data-tab="competitors" type="button" role="tab">◇　竞品对比</button>
+                <button data-tab="summary" type="button" role="tab">✦　综合结论</button>
+              </div>
+
+              <div id="analysis-content" class="analysis-content">
+                <div class="analysis-empty">完成采集后生成竞品分析。</div>
+              </div>
+            </div>
+
+            <aside id="report-panel" class="report-panel">
+              <div class="report-heading">
+                <div>
+                  <span class="report-kicker">ANALYSIS REPORT</span>
+                  <h2>竞品分析报告</h2>
+                </div>
+                <span id="analysis-mode" class="mode-badge">等待生成</span>
+              </div>
+              <pre id="report-preview" class="report-preview">报告生成后将在这里显示 Markdown 预览。</pre>
+              <div class="report-actions">
+                <button id="copy-report" class="secondary-button" type="button" disabled>复制报告</button>
+                <button id="download-report" class="gradient-button" type="button" disabled>导出 Markdown</button>
+              </div>
+
+              <div class="summary-card">
+                <span class="summary-icon">✦</span>
+                <div>
+                  <h3>爆款经验总结</h3>
+                  <ul id="summary-list">
+                    <li>分析完成后自动生成可执行结论</li>
+                  </ul>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <section id="metrics-overview" class="metrics-overview" hidden>
+            <div class="panel-heading">
+              <h2>数据概览</h2>
+              <p id="metrics-overview-meta">基于当前采集样本计算</p>
+            </div>
+            <div id="metrics-overview-content"></div>
+          </section>
+        </section>
+
+        <footer>
+          <span>本地只读竞品分析 Demo</span>
+          <span>·</span>
+          <span>结论仅基于当前可见样本，请结合业务判断</span>
+        </footer>
+      </main>
+    </div>
+
+    <dialog id="detail-dialog" class="detail-dialog">
+      <button id="close-dialog" class="dialog-close" type="button" aria-label="关闭">×</button>
+      <div id="detail-content" class="detail-content"></div>
+    </dialog>
+  </body>
+</html>
