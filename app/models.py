@@ -152,6 +152,27 @@ class CompetitorAnalysis(BaseModel):
     json_download_url: str | None = None
 
 
+class PromotionCopy(BaseModel):
+    title: str = Field(min_length=1, max_length=60)
+    body: str = Field(min_length=1, max_length=2000)
+    hashtags: list[str] = Field(min_length=3, max_length=12)
+    image_brief: str = Field(min_length=1, max_length=1200)
+
+
+class GeneratedPromotionImage(BaseModel):
+    index: int
+    media_type: str = "image/png"
+    data_url: str
+
+
+class PromotionGenerationResponse(BaseModel):
+    generated_at: str
+    text_model: str
+    image_model: str
+    promotion_copy: PromotionCopy
+    images: list[GeneratedPromotionImage] = Field(min_length=1)
+
+
 class ApiErrorBody(BaseModel):
     code: str
     message: str

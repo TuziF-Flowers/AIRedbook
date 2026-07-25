@@ -19,6 +19,12 @@ from app.models import (
 )
 from app.services.vision_analyzer import VisionAnalyzer
 
+
+def _sampling_options(model: str | None) -> dict[str, float]:
+    if model and model.casefold().startswith("gpt-5"):
+        return {}
+    return {"temperature": 0.2}
+
 TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+#.-]{1,20}|[\u4e00-\u9fff]{2,6}")
 EMOJI_PATTERN = re.compile(
     "[\U0001F300-\U0001FAFF\u2600-\u27BF]",
@@ -566,6 +572,7 @@ class CompetitorAnalyzer:
         }
         request_body = {
             "model": self.config.ai_model,
+            **_sampling_options(self.config.ai_model),
             "messages": [
                 {
                     "role": "system",

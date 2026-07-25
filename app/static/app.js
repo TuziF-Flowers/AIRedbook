@@ -32,17 +32,39 @@ const sideNavLinks = Array.from(document.querySelectorAll(".side-nav [data-nav-k
 const competitorTabs = $("#competitor-tabs");
 const collectionSort = $("#collection-sort");
 const hotTagList = $("#hot-tag-list");
+const productBriefInput = $("#product-brief");
+const productBriefCount = $("#product-brief-count");
+const productImagesInput = $("#product-images");
+const productImageDropzone = $("#product-image-dropzone");
+const productImageFeedback = $("#product-image-feedback");
+const productImagePreview = $("#product-image-preview");
+const creationSection = $("#creation");
+const creationEntryButton = $("#creation-entry-button");
+const generatePromotionButton = $("#generate-promotion-button");
+const creationMessage = $("#creation-message");
+const promotionCopy = $("#promotion-copy");
+const promotionImages = $("#promotion-images");
+const copyPromotionButton = $("#copy-promotion-button");
+const creationModel = $("#creation-model");
+
+const MAX_PRODUCT_IMAGES = 6;
+const MAX_PRODUCT_IMAGE_BYTES = 8 * 1024 * 1024;
+const PRODUCT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const state = {
   keyword: "",
   competitors: [],
   loading: false,
   analyzing: false,
+  generating: false,
   notes: [],
   analysis: null,
+  promotion: null,
   activeTab: "title",
   activeCompetitor: "all",
   collectionSort: "heat",
+  productBrief: "",
+  productImages: [],
 };
 
 function element(tag, className, text) {
@@ -97,6 +119,9 @@ function updateSideNavFromScroll() {
   }
   if (!metricsOverview.hidden && metricsOverview.offsetTop <= marker) {
     activeKey = "report";
+  }
+  if (!creationSection.hidden && creationSection.offsetTop <= marker) {
+    activeKey = "creation";
   }
 
   setActiveSideNav(activeKey);
@@ -159,6 +184,116 @@ function renderCompetitorChips() {
   competitorInput.placeholder = state.competitors.length
     ? "继续添加竞品"
     : "输入品牌或型号后按回车";
+}
+
+function setProductImageFeedback(message, kind = "") {
+  productImageFeedback.textContent = message;
+  productImageFeedback.className = `product-image-feedback${kind ? ` ${kind}` : ""}`;
+}
+
+function removeProductImage(id) {
+  const index = state.productImages.findIndex((item) => item.id === id);
+  if (index === -1) return;
+  URL.revokeObjectURL(state.productImages[index].previewUrl);
+  state.productImages.splice(index, 1);
+  renderProductImages();
+  updateCreationReadiness();
+}
+
+function renderProductImages(message = "", kind = "") {
+  productImagePreview.replaceChildren();
+  productImagePreview.hidden = state.productImages.length === 0;
+
+  state.productImages.forEach((item, index) => {
+    const figure = element("figure", "product-image-item");
+    const preview = element("img");
+    preview.src = item.previewUrl;
+    preview.alt = `产品图片 ${index + 1}`;
+
+    const remove = element("button", "", "×");
+    remove.type = "button";
+    remove.title = `删除 ${item.file.name}`;
+    remove.setAttribute("aria-label", `删除产品图片 ${index + 1}`);
+    remove.addEventListener("click", () => removeProductImage(item.id));
+    figure.append(preview, remove);
+    productImagePreview.append(figure);
+  });
+
+  if (message) {
+    setProductImageFeedback(message, kind);
+  } else if (state.productImages.length) {
+    setProductImageFeedback(`已添加 ${state.productImages.length} / ${MAX_PRODUCT_IMAGES} 张`);
+  } else {
+    setProductImageFeedback("尚未添加图片");
+  }
+}
+
+function addProductImages(fileList) {
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+
+  let invalidCount = 0;
+  let duplicateCount = 0;
+  let overflowCount = 0;
+  const existingKeys = new Set(
+    state.productImages.map(({ file }) => `${file.name}:${file.size}:${file.lastModified}`),
+  );
+
+  files.forEach((file) => {
+    const key = `${file.name}:${file.size}:${file.lastModified}`;
+    if (!PRODUCT_IMAGE_TYPES.has(file.type) || file.size > MAX_PRODUCT_IMAGE_BYTES) {
+      invalidCount += 1;
+      return;
+    }
+    if (existingKeys.has(key)) {
+      duplicateCount += 1;
+      return;
+    }
+    if (state.productImages.length >= MAX_PRODUCT_IMAGES) {
+      overflowCount += 1;
+      return;
+    }
+
+    existingKeys.add(key);
+    state.productImages.push({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    });
+  });
+
+  const issues = [];
+  if (invalidCount) issues.push(`${invalidCount} 张格式或大小不符合要求`);
+  if (duplicateCount) issues.push(`${duplicateCount} 张重复图片`);
+  if (overflowCount) issues.push(`${overflowCount} 张超出数量限制`);
+  const message = issues.length
+    ? `已添加 ${state.productImages.length} / ${MAX_PRODUCT_IMAGES} 张；${issues.join("，")}。`
+    : "";
+  renderProductImages(message, issues.length ? "error" : "");
+  updateCreationReadiness();
+  productImagesInput.value = "";
+}
+
+function creationRequirements() {
+  const missing = [];
+  if (!state.productBrief.trim()) missing.push("产品信息");
+  if (!state.productImages.length) missing.push("产品图片");
+  if (!state.analysis || state.analysis.analysis_mode !== "ai") missing.push("真实 AI 分析");
+  return missing;
+}
+
+function updateCreationReadiness() {
+  const missing = creationRequirements();
+  const ready = missing.length === 0;
+  creationEntryButton.disabled = !ready || state.generating;
+  generatePromotionButton.disabled = !ready || state.generating;
+  if (!state.generating && !state.promotion) {
+    setCreationProgress(
+      0,
+      ready ? "素材已就绪" : "等待生成",
+      ready ? "可以开始生成真实 AI 文案与宣传图" : `还需要：${missing.join("、")}`,
+    );
+  }
 }
 
 function image(url, alt, className = "") {
@@ -401,6 +536,7 @@ async function runSearch() {
   if (state.loading || state.analyzing) return;
   state.loading = true;
   state.analysis = null;
+  state.promotion = null;
   state.notes = [];
   hideMessage();
   searchButton.disabled = true;
@@ -413,7 +549,9 @@ async function runSearch() {
   resultsGrid.replaceChildren();
   renderSkeletons();
   analysisSection.hidden = true;
+  creationSection.hidden = true;
   metricsOverview.hidden = true;
+  creationEntryButton.disabled = true;
   setStep(2);
 
   resultsSection.hidden = false;
@@ -553,16 +691,159 @@ async function runAnalysis() {
     downloadJsonButton.disabled = !state.analysis.json_download_url;
     downloadReportButton.disabled = false;
     renderAnalysisTab(state.activeTab);
+    creationSection.hidden = false;
+    updateCreationReadiness();
+    scheduleSideNavUpdate();
   } catch (error) {
     stopAnalysisProgressAnimation();
     const detail = error.hint ? `${error.message} ${error.hint}` : error.message;
     analysisContent.replaceChildren(element("div", "analysis-empty error", detail));
     setAnalysisProgress(0, "分析未完成", "请检查服务配置后重试");
+    creationSection.hidden = true;
+    updateCreationReadiness();
   } finally {
     stopAnalysisProgressAnimation();
     state.analyzing = false;
     analyzeButton.disabled = false;
     analyzeButton.lastElementChild.textContent = "重新生成分析";
+  }
+}
+
+function setCreationProgress(percent, title, meta) {
+  $("#creation-progress-percent").textContent = `${percent}%`;
+  $("#creation-progress-fill").style.width = `${percent}%`;
+  $("#creation-progress-title").textContent = title;
+  $("#creation-progress-meta").textContent = meta;
+}
+
+function showCreationMessage(text) {
+  creationMessage.hidden = false;
+  creationMessage.textContent = text;
+}
+
+function hideCreationMessage() {
+  creationMessage.hidden = true;
+  creationMessage.textContent = "";
+}
+
+function promotionCopyText() {
+  if (!state.promotion) return "";
+  const copy = state.promotion.promotion_copy;
+  const tags = copy.hashtags.map((tag) => `#${tag}`).join(" ");
+  return `${copy.title}\n\n${copy.body}\n\n${tags}`;
+}
+
+function renderPromotion(result) {
+  const copy = result.promotion_copy;
+  promotionCopy.className = "promotion-copy";
+  promotionCopy.replaceChildren(
+    element("h3", "promotion-title", copy.title),
+    element("p", "promotion-body", copy.body),
+  );
+  const tags = element("div", "promotion-tags");
+  copy.hashtags.forEach((tag) => tags.append(element("span", "", `#${tag}`)));
+  promotionCopy.append(tags);
+
+  promotionImages.replaceChildren();
+  result.images.forEach((item, index) => {
+    const figure = element("figure", "promotion-image-item");
+    const img = element("img");
+    img.src = item.data_url;
+    img.alt = `AI 生成宣传图 ${index + 1}`;
+    const actions = element("figcaption");
+    actions.append(element("span", "", `方案 ${String(index + 1).padStart(2, "0")}`));
+    const download = element("button", "secondary-button", "下载图片");
+    download.type = "button";
+    download.addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.href = item.data_url;
+      link.download = `${state.keyword || "宣传产品"}-AI宣传图-${index + 1}.png`;
+      link.click();
+    });
+    actions.append(download);
+    figure.append(img, actions);
+    promotionImages.append(figure);
+  });
+  creationModel.textContent = result.image_model;
+  copyPromotionButton.disabled = false;
+}
+
+async function generatePromotion() {
+  if (state.generating) return;
+  const missing = creationRequirements();
+  if (missing.length) {
+    showCreationMessage(`请先补充：${missing.join("、")}。`);
+    return;
+  }
+
+  state.generating = true;
+  state.promotion = null;
+  hideCreationMessage();
+  setStep(4);
+  updateCreationReadiness();
+  generatePromotionButton.lastElementChild.textContent = "AI 正在创作…";
+  copyPromotionButton.disabled = true;
+  setCreationProgress(12, "正在策划宣传文案", "真实 AI 正在组合产品卖点与竞品内容规律");
+  creationSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  promotionCopy.className = "promotion-copy is-empty";
+  promotionCopy.replaceChildren(
+    element("strong", "", "AI 正在撰写标题、正文和话题标签"),
+    element("p", "", "文案完成后会继续生成两张高质量竖版宣传图。"),
+  );
+  promotionImages.replaceChildren();
+  [1, 2].forEach((index) => {
+    const placeholder = element("div", "promotion-image-placeholder is-loading");
+    placeholder.append(
+      element("span", "", String(index).padStart(2, "0")),
+      element("small", "", "AI 图片生成中"),
+    );
+    promotionImages.append(placeholder);
+  });
+
+  let progress = 12;
+  const progressTimer = window.setInterval(() => {
+    progress = Math.min(90, progress + (progress < 55 ? 7 : 3));
+    const generatingImages = progress >= 45;
+    setCreationProgress(
+      progress,
+      generatingImages ? "正在生成宣传图片" : "正在策划宣传文案",
+      generatingImages ? "保持产品外观，生成两套原创竖版视觉" : "提炼标题、正文和视觉创意",
+    );
+  }, 2500);
+
+  try {
+    const formData = new FormData();
+    formData.append("product_brief", state.productBrief.trim());
+    formData.append("analysis_json", JSON.stringify(state.analysis));
+    state.productImages.forEach(({ file }) => formData.append("images", file, file.name));
+    const response = await fetch("/api/generate-promotion", {
+      method: "POST",
+      body: formData,
+    });
+    const result = await parseResponse(response);
+    state.promotion = result;
+    renderPromotion(result);
+    setCreationProgress(
+      100,
+      "宣传内容生成完成",
+      `${result.text_model} 文案 · ${result.image_model} 图片 · ${result.images.length} 个方案`,
+    );
+  } catch (error) {
+    const detail = error.hint ? `${error.message} ${error.hint}` : error.message;
+    showCreationMessage(detail);
+    setCreationProgress(0, "生成未完成", "未使用本地或模拟结果，请检查 AI 服务后重试");
+    promotionCopy.className = "promotion-copy is-empty";
+    promotionCopy.replaceChildren(
+      element("strong", "", "真实 AI 生成失败"),
+      element("p", "", "调整配置或素材后可重新生成。"),
+    );
+  } finally {
+    window.clearInterval(progressTimer);
+    state.generating = false;
+    generatePromotionButton.lastElementChild.textContent = state.promotion
+      ? "重新生成"
+      : "生成宣传内容";
+    updateCreationReadiness();
   }
 }
 
@@ -901,6 +1182,35 @@ competitorInput.addEventListener("keydown", (event) => {
 });
 addCompetitorButton.addEventListener("click", () => addCompetitor(competitorInput.value));
 
+productBriefInput.addEventListener("input", () => {
+  state.productBrief = productBriefInput.value;
+  productBriefCount.textContent = `${productBriefInput.value.length} / 1200`;
+  updateCreationReadiness();
+});
+
+productImagesInput.addEventListener("change", () => addProductImages(productImagesInput.files));
+productImageDropzone.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    productImagesInput.click();
+  }
+});
+productImageDropzone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  productImageDropzone.classList.add("is-dragging");
+});
+productImageDropzone.addEventListener("dragleave", () => {
+  productImageDropzone.classList.remove("is-dragging");
+});
+productImageDropzone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  productImageDropzone.classList.remove("is-dragging");
+  addProductImages(event.dataTransfer.files);
+});
+window.addEventListener("beforeunload", () => {
+  state.productImages.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+});
+
 document.querySelectorAll("[data-keyword]").forEach((button) => {
   button.addEventListener("click", () => {
     keywordInput.value = button.dataset.keyword;
@@ -934,6 +1244,20 @@ window.addEventListener("scroll", scheduleSideNavUpdate, { passive: true });
 window.addEventListener("resize", scheduleSideNavUpdate);
 
 analyzeButton.addEventListener("click", runAnalysis);
+creationEntryButton.addEventListener("click", () => {
+  creationSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  setStep(4);
+});
+generatePromotionButton.addEventListener("click", generatePromotion);
+copyPromotionButton.addEventListener("click", async () => {
+  const text = promotionCopyText();
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
+  copyPromotionButton.textContent = "已复制";
+  window.setTimeout(() => {
+    copyPromotionButton.textContent = "复制文案";
+  }, 1400);
+});
 copyReportButton.addEventListener("click", async () => {
   if (!state.analysis) return;
   await navigator.clipboard.writeText(state.analysis.report_markdown);
@@ -950,4 +1274,5 @@ dialog.addEventListener("click", (event) => {
 });
 
 loadSession();
+updateCreationReadiness();
 scheduleSideNavUpdate();

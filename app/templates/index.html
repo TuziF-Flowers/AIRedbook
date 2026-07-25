@@ -35,6 +35,7 @@
           </a>
           <a href="#collection" data-nav-key="collection"><span>▣</span>竞品采集</a>
           <a href="#analysis" data-nav-key="analysis"><span>✦</span>AI 分析</a>
+          <a href="#creation" data-nav-key="creation"><span>▧</span>AI 创作</a>
           <a href="#metrics-overview" data-nav-key="report"><span>≡</span>分析报告</a>
         </nav>
 
@@ -65,6 +66,10 @@
             <li data-step="3">
               <span>3</span>
               <div><strong>AI 分析</strong><small>总结爆款规律</small></div>
+            </li>
+            <li data-step="4">
+              <span>4</span>
+              <div><strong>AI 创作</strong><small>生成文案与图片</small></div>
             </li>
           </ol>
           <div id="session-status" class="session-badge" aria-live="polite">
@@ -118,6 +123,70 @@
                 <button id="add-competitor" type="button" aria-label="添加竞品">＋</button>
               </div>
               <small>合计最多采集 20 篇，系统自动分配每个竞品的名额</small>
+            </div>
+
+            <div class="form-card product-assets-card">
+              <div class="product-assets-heading">
+                <div>
+                  <span class="product-assets-kicker">PRODUCT BRIEF</span>
+                  <h2>待宣传产品素材</h2>
+                </div>
+                <span class="product-assets-status">仅当前页面保留</span>
+              </div>
+
+              <div class="product-assets-grid">
+                <div class="product-brief-field">
+                  <label class="form-label" for="product-brief">产品信息</label>
+                  <textarea
+                    id="product-brief"
+                    name="product-brief"
+                    maxlength="1200"
+                    aria-describedby="product-brief-help product-brief-count"
+                    placeholder="填写核心卖点、目标人群、使用场景、品牌语气等信息"
+                  ></textarea>
+                  <div class="product-field-meta">
+                    <small id="product-brief-help">用于后续结合竞品规律策划宣传内容</small>
+                    <span id="product-brief-count">0 / 1200</span>
+                  </div>
+                </div>
+
+                <div class="product-image-field">
+                  <div class="product-image-label">
+                    <label class="form-label" for="product-images">产品图片</label>
+                    <span>最多 6 张</span>
+                  </div>
+                  <input
+                    id="product-images"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    hidden
+                  />
+                  <label
+                    id="product-image-dropzone"
+                    class="product-image-dropzone"
+                    for="product-images"
+                    role="button"
+                    tabindex="0"
+                  >
+                    <span class="product-upload-icon" aria-hidden="true">↑</span>
+                    <span class="product-upload-copy">
+                      <strong>上传产品图片</strong>
+                      <small>JPG、PNG 或 WebP，单张不超过 8MB</small>
+                    </span>
+                    <span class="product-upload-action">选择图片</span>
+                  </label>
+                  <div id="product-image-feedback" class="product-image-feedback" role="status">
+                    尚未添加图片
+                  </div>
+                  <div
+                    id="product-image-preview"
+                    class="product-image-preview"
+                    aria-live="polite"
+                    hidden
+                  ></div>
+                </div>
+              </div>
             </div>
 
             <div class="search-actions">
@@ -256,6 +325,9 @@
                 <button id="download-report" class="gradient-button" type="button" disabled>导出 Markdown</button>
               </div>
               <p id="artifact-status" class="artifact-status">AI 洞察完成后会自动保存本地 JSON。</p>
+              <button id="creation-entry-button" class="creation-entry-button" type="button" disabled>
+                <span>▧</span><span>用分析结果生成宣传内容</span><span>→</span>
+              </button>
 
               <div class="summary-card">
                 <span class="summary-icon">✦</span>
@@ -276,6 +348,64 @@
             </div>
             <div id="metrics-overview-content"></div>
           </section>
+        </section>
+
+        <section id="creation" class="creation-section" hidden>
+          <div class="section-heading creation-heading">
+            <div>
+              <p class="eyebrow">AI CREATION</p>
+              <h2>宣传文案与图片</h2>
+              <p class="section-description">结合产品素材和竞品风格洞察，生成可直接使用的原创宣传内容。</p>
+            </div>
+            <button id="generate-promotion-button" class="gradient-button" type="button">
+              <span>✦</span><span>生成宣传内容</span>
+            </button>
+          </div>
+
+          <div class="creation-progress">
+            <div>
+              <span class="progress-icon">▧</span>
+              <div>
+                <strong id="creation-progress-title">等待生成</strong>
+                <small id="creation-progress-meta">需要产品信息、产品图片和真实 AI 分析结果</small>
+              </div>
+            </div>
+            <span id="creation-progress-percent" class="progress-percent">0%</span>
+            <div class="progress-track"><span id="creation-progress-fill"></span></div>
+          </div>
+
+          <div id="creation-message" class="message" role="status" hidden></div>
+          <div class="creation-layout">
+            <article class="creation-copy-panel">
+              <div class="creation-panel-heading">
+                <div>
+                  <span class="report-kicker">PROMOTIONAL COPY</span>
+                  <h3>宣传文案</h3>
+                </div>
+                <button id="copy-promotion-button" class="secondary-button" type="button" disabled>
+                  复制文案
+                </button>
+              </div>
+              <div id="promotion-copy" class="promotion-copy is-empty">
+                <strong>生成后显示标题、正文和话题标签</strong>
+                <p>文案会遵循产品真实信息，并吸收第 3 步提炼出的标题与正文规律。</p>
+              </div>
+            </article>
+
+            <div class="creation-images-panel">
+              <div class="creation-panel-heading">
+                <div>
+                  <span class="report-kicker">PROMOTIONAL VISUALS</span>
+                  <h3>宣传图片</h3>
+                </div>
+                <span id="creation-model" class="mode-badge">gpt-image-2</span>
+              </div>
+              <div id="promotion-images" class="promotion-images" aria-live="polite">
+                <div class="promotion-image-placeholder"><span>01</span><small>竖版宣传图</small></div>
+                <div class="promotion-image-placeholder"><span>02</span><small>竖版宣传图</small></div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <footer>

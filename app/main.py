@@ -3,10 +3,11 @@ from __future__ import annotations
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated
 from urllib.parse import urljoin, urlparse
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -15,6 +16,7 @@ from app.config import settings
 from app.models import (
     AnalysisRequest,
     ApiErrorBody,
+    CompetitorAnalysis,
     CompetitorCollectionRequest,
     NoteDetail,
     NoteDetailRequest,
@@ -24,6 +26,10 @@ from app.models import (
 from app.services.analysis_store import AnalysisStore
 from app.services.competitor_analyzer import CompetitorAnalyzer
 from app.services.normalizer import normalize_detail, normalize_search
+from app.services.promotion_generator import (
+    PromotionGenerationError,
+    PromotionGenerator,
+)
 from app.services.redbook_cli import RedbookCLI, RedbookError
 
 APP_DIR = Path(__file__).resolve().parent
@@ -31,6 +37,9 @@ templates = Jinja2Templates(directory=APP_DIR / "templates")
 IMAGE_HOST_SUFFIXES = (".xhscdn.com", ".xiaohongshu.com")
 IMAGE_HOSTS = {"xhscdn.com", "xiaohongshu.com"}
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
+MAX_PRODUCT_UPLOAD_BYTES = 8 * 1024 * 1024
+MAX_PRODUCT_UPLOADS = 6
+PRODUCT_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 IMAGE_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -59,6 +68,7 @@ async def lifespan(app: FastAPI):
     app.state.redbook = RedbookCLI(settings)
     app.state.analyzer = CompetitorAnalyzer(settings)
     app.state.analysis_store = AnalysisStore(settings.analysis_storage_dir)
+    app.state.promotion_generator = PromotionGenerator(settings)
     app.state.note_details = {}
     yield
 
@@ -190,6 +200,15 @@ async def handle_redbook_error(_: Request, exc: RedbookError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content=body.model_dump())
 
 
+@app.exception_handler(PromotionGenerationError)
+async def handle_promotion_error(
+    _: Request,
+    exc: PromotionGenerationError,
+) -> JSONResponse:
+    body = ApiErrorBody(code=exc.code, message=exc.message, hint=exc.hint)
+    return JSONResponse(status_code=exc.status_code, content=body.model_dump())
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="index.html")
@@ -204,6 +223,10 @@ async def health(request: Request) -> dict[str, object]:
         "cookie_file_available": cli.has_cookie_file,
         "platform": settings.redbook_platform,
         "ai_configured": bool(settings.ai_api_key and settings.ai_model),
+        "image_generation_configured": bool(
+            settings.ai_api_key and settings.ai_image_model
+        ),
+        "image_model": settings.ai_image_model,
     }
 
 
@@ -529,3 +552,65 @@ async def download_analysis_json(request: Request, analysis_id: str) -> FileResp
         media_type="application/json",
         filename=path.name,
     )
+
+
+@app.post("/api/generate-promotion")
+async def generate_promotion(
+    request: Request,
+    product_brief: Annotated[str, Form(min_length=1, max_length=1200)],
+    analysis_json: Annotated[str, Form(min_length=2, max_length=100_000)],
+    images: Annotated[list[UploadFile], File()],
+):
+    cleaned_brief = product_brief.strip()
+    if not cleaned_brief:
+        raise PromotionGenerationError(
+            "EMPTY_PRODUCT_BRIEF",
+            "请先填写待宣传产品信息。",
+            status_code=422,
+        )
+    try:
+        analysis = CompetitorAnalysis.model_validate_json(analysis_json)
+    except ValueError as exc:
+        raise PromotionGenerationError(
+            "INVALID_ANALYSIS",
+            "竞品分析数据无效，请重新完成第 3 步。",
+            status_code=422,
+        ) from exc
+    if analysis.analysis_mode != "ai":
+        raise PromotionGenerationError(
+            "AI_ANALYSIS_REQUIRED",
+            "第 4 步需要真实 AI 竞品分析结果。",
+            hint="请确认文本模型可用后重新生成第 3 步分析。",
+            status_code=422,
+        )
+    if not images or len(images) > MAX_PRODUCT_UPLOADS:
+        raise PromotionGenerationError(
+            "INVALID_IMAGE_COUNT",
+            f"请上传 1 至 {MAX_PRODUCT_UPLOADS} 张产品图片。",
+            status_code=422,
+        )
+
+    uploaded: list[tuple[str, bytes, str]] = []
+    for index, image in enumerate(images, start=1):
+        content_type = (image.content_type or "").lower()
+        if content_type not in PRODUCT_IMAGE_TYPES:
+            raise PromotionGenerationError(
+                "INVALID_PRODUCT_IMAGE",
+                "产品图片仅支持 JPG、PNG 和 WebP。",
+                status_code=422,
+            )
+        content = await image.read(MAX_PRODUCT_UPLOAD_BYTES + 1)
+        await image.close()
+        if not content or len(content) > MAX_PRODUCT_UPLOAD_BYTES:
+            raise PromotionGenerationError(
+                "INVALID_PRODUCT_IMAGE",
+                "每张产品图片必须有效且不超过 8MB。",
+                status_code=422,
+            )
+        extension = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[
+            content_type
+        ]
+        uploaded.append((f"product-reference-{index}.{extension}", content, content_type))
+
+    generator: PromotionGenerator = request.app.state.promotion_generator
+    return await generator.generate(cleaned_brief, analysis, uploaded)

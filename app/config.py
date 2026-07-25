@@ -55,6 +55,13 @@ class Settings:
         os.getenv("ANALYSIS_STORAGE_DIR"),
         PROJECT_ROOT / "data" / "analyses",
     )
+    ai_image_model: str = os.getenv("AI_IMAGE_MODEL", "gpt-image-2")
+    ai_image_count: int = int(os.getenv("AI_IMAGE_COUNT", "2"))
+    ai_image_size: str = os.getenv("AI_IMAGE_SIZE", "1024x1536")
+    ai_image_quality: str = os.getenv("AI_IMAGE_QUALITY", "high")
+    ai_image_timeout_seconds: float = float(
+        os.getenv("AI_IMAGE_TIMEOUT_SECONDS", "240")
+    )
 
 
 settings = Settings()
